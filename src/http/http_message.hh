@@ -35,7 +35,7 @@ protected:
     std::string first_line_ {};
 
     /* request/response headers */
-    std::vector< HTTPHeader > headers_ {};
+    std::vector<HTTPHeader> headers_ {};
 
     /* body may be empty */
     std::string body_ {};
@@ -57,11 +57,16 @@ public:
     size_t read_in_body( const std::string & str );
     void eof( void );
 
+    /* setter */
+    void add_header( const HTTPHeader & header );
+
     /* getters */
     bool body_size_is_known( void ) const;
     size_t expected_body_size( void ) const;
     const HTTPMessageState & state( void ) const { return state_; }
     const std::string & first_line( void ) const { return first_line_; }
+    const std::vector<HTTPHeader> & headers() const { return headers_; }
+    const std::string & body() const { return body_; }
 
     /* troll through the headers */
     bool has_header( const std::string & header_name ) const;

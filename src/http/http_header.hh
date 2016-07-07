@@ -12,6 +12,7 @@ private:
 
 public:
     HTTPHeader( const std::string & buf );
+    HTTPHeader( const std::string & key, const std::string & value );
 
     const std::string & key( void ) const { return key_; }
     const std::string & value( void ) const { return value_; }

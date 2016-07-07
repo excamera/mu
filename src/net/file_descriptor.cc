@@ -35,6 +35,16 @@ FileDescriptor::FileDescriptor( FileDescriptor && other )
     other.fd_ = -1;
 }
 
+/* explicit close (since this can throw an exception, it's better
+   for the owner to call this explicitly rather than just letting
+   the object go out of scope) */
+
+void FileDescriptor::close()
+{
+    SystemCall( "close", ::close( fd_ ) );
+    fd_ = -1;
+}
+
 /* destructor */
 FileDescriptor::~FileDescriptor()
 {
@@ -43,7 +53,7 @@ FileDescriptor::~FileDescriptor()
     }
 
     try {
-        SystemCall( "close", close( fd_ ) );
+        close();
     } catch ( const exception & e ) { /* don't throw from destructor */
         print_exception( e );
     }

@@ -21,6 +21,12 @@ void HTTPMessage::add_header( const std::string & str )
     headers_.emplace_back( str );
 }
 
+void HTTPMessage::add_header( const HTTPHeader & header )
+{
+    assert( state_ == HEADERS_PENDING );
+    headers_.push_back( header );
+}
+
 void HTTPMessage::done_with_headers( void )
 {
     assert( state_ == HEADERS_PENDING );

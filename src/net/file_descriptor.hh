@@ -44,6 +44,9 @@ public:
     std::string::const_iterator write( const std::string::const_iterator & begin,
                                        const std::string::const_iterator & end );
 
+    /* explicit close (since can throw an exception) */
+    void close();
+
     /* forbid copying FileDescriptor objects or assigning them */
     FileDescriptor( const FileDescriptor & other ) = delete;
     const FileDescriptor & operator=( const FileDescriptor & other ) = delete;

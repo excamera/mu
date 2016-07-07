@@ -5,6 +5,7 @@
 
 #include <string>
 #include <queue>
+#include <cassert>
 
 #include "http_message.hh"
 

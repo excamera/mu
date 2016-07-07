@@ -33,3 +33,7 @@ HTTPHeader::HTTPHeader( const string & buf )
         value_ = value_temp.substr( first_nonspace );
     }
 }
+
+HTTPHeader::HTTPHeader( const string & key, const string & value )
+    : key_( key ), value_( value )
+{}
