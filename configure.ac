@@ -28,6 +28,7 @@ AC_PROG_RANLIB
 AC_CONFIG_FILES([
 	Makefile
 	src/Makefile
-	src/frontend/Makefile])
+	src/frontend/Makefile
+	src/tests/Makefile])
 
 AC_OUTPUT
