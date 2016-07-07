@@ -8,7 +8,7 @@
 
 using namespace std;
 
-void HTTPRequest::calculate_expected_body_size( void )
+void HTTPRequest::calculate_expected_body_size()
 {
     assert( state_ == BODY_PENDING );
 
@@ -32,12 +32,12 @@ size_t HTTPRequest::read_in_complex_body( const std::string & )
     throw runtime_error( "HTTPRequest: does not support chunked requests" );
 }
 
-bool HTTPRequest::eof_in_body( void ) const
+bool HTTPRequest::eof_in_body() const
 {
     throw runtime_error( "HTTPRequest: got EOF in middle of body" );
 }
 
-bool HTTPRequest::is_head( void ) const
+bool HTTPRequest::is_head() const
 {
     assert( state_ > FIRST_LINE_PENDING );
     /* RFC 2616 5.1.1 says "The method is case-sensitive." */

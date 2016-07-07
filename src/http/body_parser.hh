@@ -15,7 +15,7 @@ public:
     virtual std::string::size_type read( const std::string & str ) = 0;
 
     /* does message become complete upon EOF in body? */
-    virtual bool eof( void ) const = 0;
+    virtual bool eof() const = 0;
 
     virtual ~BodyParser() {}
 };
@@ -32,7 +32,7 @@ public:
 
     /* does message become complete upon EOF in body? */
     /* when there was no content-length header on a response, answer is yes */
-    bool eof( void ) const override
+    bool eof() const override
     {
         return true;
     }

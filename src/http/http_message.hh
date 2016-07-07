@@ -22,13 +22,13 @@ private:
     std::pair< bool, size_t > expected_body_size_ { false, -1 };
 
     /* calculating the body size must be implemented by request or response */
-    virtual void calculate_expected_body_size( void ) = 0;
+    virtual void calculate_expected_body_size() = 0;
 
     /* bodies with size not known in advance must be handled by subclass */
     virtual size_t read_in_complex_body( const std::string & str ) = 0;
 
     /* does message become complete upon EOF in body? */
-    virtual bool eof_in_body( void ) const = 0;
+    virtual bool eof_in_body() const = 0;
 
 protected:
     /* request line or status line */
@@ -53,18 +53,18 @@ public:
     /* methods called by an external parser */
     void set_first_line( const std::string & str );
     void add_header( const std::string & str );
-    void done_with_headers( void );
+    void done_with_headers();
     size_t read_in_body( const std::string & str );
-    void eof( void );
+    void eof();
 
     /* setter */
     void add_header( const HTTPHeader & header );
 
     /* getters */
-    bool body_size_is_known( void ) const;
-    size_t expected_body_size( void ) const;
-    const HTTPMessageState & state( void ) const { return state_; }
-    const std::string & first_line( void ) const { return first_line_; }
+    bool body_size_is_known() const;
+    size_t expected_body_size() const;
+    const HTTPMessageState & state() const { return state_; }
+    const std::string & first_line() const { return first_line_; }
     const std::vector<HTTPHeader> & headers() const { return headers_; }
     const std::string & body() const { return body_; }
 
@@ -73,7 +73,7 @@ public:
     const std::string & get_header_value( const std::string & header_name ) const;
 
     /* serialize the request or response as one string */
-    std::string str( void ) const;
+    std::string str() const;
 
     /* compare two strings for (case-insensitive) equality,
        in ASCII without sensitivity to locale */

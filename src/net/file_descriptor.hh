@@ -18,9 +18,9 @@ private:
     const static size_t BUFFER_SIZE = 1024 * 1024;
 
 protected:
-    void register_read( void ) { read_count_++; }
-    void register_write( void ) { write_count_++; }
-    void set_eof( void ) { eof_ = true; }
+    void register_read() { read_count_++; }
+    void register_write() { write_count_++; }
+    void set_eof() { eof_ = true; }
 
 public:
     /* construct from fd number */
@@ -33,10 +33,10 @@ public:
     virtual ~FileDescriptor();
 
     /* accessors */
-    const int & fd_num( void ) const { return fd_; }
-    const bool & eof( void ) const { return eof_; }
-    unsigned int read_count( void ) const { return read_count_; }
-    unsigned int write_count( void ) const { return write_count_; }
+    const int & fd_num() const { return fd_; }
+    const bool & eof() const { return eof_; }
+    unsigned int read_count() const { return read_count_; }
+    unsigned int write_count() const { return write_count_; }
 
     /* read and write methods */
     std::string read( const size_t limit = BUFFER_SIZE );

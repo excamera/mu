@@ -14,10 +14,10 @@ public:
     HTTPHeader( const std::string & buf );
     HTTPHeader( const std::string & key, const std::string & value );
 
-    const std::string & key( void ) const { return key_; }
-    const std::string & value( void ) const { return value_; }
+    const std::string & key() const { return key_; }
+    const std::string & value() const { return value_; }
 
-    std::string str( void ) const { return key_ + ": " + value_; }
+    std::string str() const { return key_ + ": " + value_; }
 };
 
 #endif /* HTTP_HEADER_HH */

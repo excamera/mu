@@ -11,7 +11,7 @@
 
 using namespace std;
 
-string HTTPResponse::status_code( void ) const
+string HTTPResponse::status_code() const
 {
     assert( state_ > FIRST_LINE_PENDING );
     auto tokens = split( first_line_, " " );
@@ -22,7 +22,7 @@ string HTTPResponse::status_code( void ) const
     return tokens.at( 1 );
 }
 
-void HTTPResponse::calculate_expected_body_size( void )
+void HTTPResponse::calculate_expected_body_size()
 {
     assert( state_ == BODY_PENDING );
 
@@ -84,7 +84,7 @@ size_t HTTPResponse::read_in_complex_body( const std::string & str )
     }
 }
 
-bool HTTPResponse::eof_in_body( void ) const
+bool HTTPResponse::eof_in_body() const
 {
     /* complex bodies sometimes allow an EOF to terminate the body */
     if ( body_parser_ ) {

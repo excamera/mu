@@ -13,7 +13,7 @@ private:
 public:
   MIMEType( const std::string & content_type );
 
-  const std::string & type( void ) const { return type_; }
+  const std::string & type() const { return type_; }
 };
 
 #endif /* MIME_TYPE_HH */

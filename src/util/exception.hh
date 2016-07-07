@@ -22,7 +22,7 @@ public:
           attempt_and_error_( s_attempt + ": " + std::system_error::what() )
     {}
 
-    const char * what( void ) const noexcept override
+    const char * what() const noexcept override
     {
         return attempt_and_error_.c_str();
     }

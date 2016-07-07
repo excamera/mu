@@ -38,11 +38,11 @@ public:
     void connect( const Address & address );
 
     /* accessors */
-    Address local_address( void ) const;
-    Address peer_address( void ) const;
+    Address local_address() const;
+    Address peer_address() const;
 
     /* allow local address to be reused sooner, at the cost of some robustness */
-    void set_reuseaddr( void );
+    void set_reuseaddr();
 };
 
 /* UDP socket */
@@ -52,7 +52,7 @@ public:
     UDPSocket() : Socket( AF_INET, SOCK_DGRAM ) {}
 
     /* receive datagram and where it came from */
-    std::pair<Address, std::string> recvfrom( void );
+    std::pair<Address, std::string> recvfrom();
 
     /* send datagram to specified address */
     void sendto( const Address & peer, const std::string & payload );
@@ -61,7 +61,7 @@ public:
     void send( const std::string & payload );
 
     /* turn on timestamps on receipt */
-    void set_timestamps( void );
+    void set_timestamps();
 };
 
 /* TCP socket */
@@ -78,10 +78,10 @@ public:
     void listen( const int backlog = 16 );
 
     /* accept a new incoming connection */
-    TCPSocket accept( void );
+    TCPSocket accept();
 
     /* original destination of a DNAT connection */
-    Address original_dest( void ) const;
+    Address original_dest() const;
 };
 
 #endif /* SOCKET_HH */

@@ -9,7 +9,7 @@
 
 using namespace std;
 
-void HTTPResponseParser::initialize_new_message( void )
+void HTTPResponseParser::initialize_new_message()
 {
     /* do we have a request that we can match this response up with? */
     if ( requests_.empty() ) {

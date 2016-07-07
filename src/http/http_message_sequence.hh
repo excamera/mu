@@ -19,17 +19,17 @@ private:
         std::string buffer_ {};
     
     public:
-        bool have_complete_line( void ) const;
+        bool have_complete_line() const;
 
-        std::string get_and_pop_line( void );
+        std::string get_and_pop_line();
 
         void pop_bytes( const size_t n );
 
-        bool empty( void ) const { return buffer_.empty(); }
+        bool empty() const { return buffer_.empty(); }
 
         void append( const std::string & str ) { buffer_.append( str ); }
 
-        const std::string & str( void ) const { return buffer_; }
+        const std::string & str() const { return buffer_; }
     };
 
     /* bytes that haven't been parsed yet */
@@ -40,11 +40,11 @@ private:
 
     /* one loop through the parser */
     /* returns whether to continue */
-    bool parsing_step( void );
+    bool parsing_step();
 
     /* what to do to create a new message.
        must be implemented by subclass */
-    virtual void initialize_new_message( void ) = 0;
+    virtual void initialize_new_message() = 0;
 
 protected:
     /* the current message we're working on */
@@ -58,22 +58,22 @@ public:
     void parse( const std::string & buf );
 
     /* getters */
-    bool empty( void ) const { return complete_messages_.empty(); }
-    const MessageType & front( void ) const { return complete_messages_.front(); }
+    bool empty() const { return complete_messages_.empty(); }
+    const MessageType & front() const { return complete_messages_.front(); }
 
     /* pop one request */
-    void pop( void ) { complete_messages_.pop(); }
+    void pop() { complete_messages_.pop(); }
 };
 
 template <class MessageType>
-bool HTTPMessageSequence<MessageType>::InternalBuffer::have_complete_line( void ) const
+bool HTTPMessageSequence<MessageType>::InternalBuffer::have_complete_line() const
 {
     size_t first_line_ending = buffer_.find( CRLF );
     return first_line_ending != std::string::npos;
 }
 
 template <class MessageType>
-std::string HTTPMessageSequence<MessageType>::InternalBuffer::get_and_pop_line( void )
+std::string HTTPMessageSequence<MessageType>::InternalBuffer::get_and_pop_line()
 {
     size_t first_line_ending = buffer_.find( CRLF );
     assert( first_line_ending != std::string::npos );
@@ -92,7 +92,7 @@ void HTTPMessageSequence<MessageType>::InternalBuffer::pop_bytes( const size_t n
 }
 
 template <class MessageType>
-bool HTTPMessageSequence<MessageType>::parsing_step( void )
+bool HTTPMessageSequence<MessageType>::parsing_step()
 {
     switch ( message_in_progress_.state() ) {
     case FIRST_LINE_PENDING:

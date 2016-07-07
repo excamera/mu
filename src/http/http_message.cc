@@ -27,7 +27,7 @@ void HTTPMessage::add_header( const HTTPHeader & header )
     headers_.push_back( header );
 }
 
-void HTTPMessage::done_with_headers( void )
+void HTTPMessage::done_with_headers()
 {
     assert( state_ == HEADERS_PENDING );
     state_ = BODY_PENDING;
@@ -65,7 +65,7 @@ size_t HTTPMessage::read_in_body( const std::string & str )
     }
 }
 
-void HTTPMessage::eof( void )
+void HTTPMessage::eof()
 {
     switch ( state() ) {
     case FIRST_LINE_PENDING:
@@ -83,13 +83,13 @@ void HTTPMessage::eof( void )
     }
 }
 
-bool HTTPMessage::body_size_is_known( void ) const
+bool HTTPMessage::body_size_is_known() const
 {
     assert( state_ > HEADERS_PENDING );
     return expected_body_size_.first;
 }
 
-size_t HTTPMessage::expected_body_size( void ) const
+size_t HTTPMessage::expected_body_size() const
 {
     assert( body_size_is_known() );
     return expected_body_size_.second;
@@ -159,7 +159,7 @@ const string & HTTPMessage::get_header_value( const std::string & header_name ) 
 }
 
 /* serialize the request or response as one string */
-std::string HTTPMessage::str( void ) const
+std::string HTTPMessage::str() const
 {
     assert( state_ == COMPLETE );
 
