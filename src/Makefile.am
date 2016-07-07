@@ -1,1 +1,1 @@
-SUBDIRS = util http frontend tests
+SUBDIRS = util net http frontend tests

@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(srcdir)/../util $(CXX14_FLAGS)
+AM_CPPFLAGS = $(CXX14_FLAGS) -I$(srcdir)/../util
 AM_CXXFLAGS = $(PICKY_CXXFLAGS)
 
 noinst_LIBRARIES = libhttp.a
