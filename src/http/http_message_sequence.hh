@@ -36,7 +36,7 @@ private:
     InternalBuffer buffer_ {};
 
     /* complete messages ready to go */
-    std::queue< MessageType > complete_messages_ {};
+    std::queue<MessageType> complete_messages_ {};
 
     /* one loop through the parser */
     /* returns whether to continue */

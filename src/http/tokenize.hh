@@ -8,7 +8,7 @@
 
 static std::vector< std::string > split( const std::string & str, const std::string & separator )
 {
-    std::vector< size_t > indices;
+    std::vector<size_t> indices;
 
     size_t next_token = 0;
     while ( (next_token = str.find( separator, next_token )) != std::string::npos ) {

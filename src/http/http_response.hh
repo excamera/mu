@@ -21,7 +21,7 @@ private:
     size_t read_in_complex_body( const std::string & str ) override;
     bool eof_in_body() const override;
 
-    std::unique_ptr< BodyParser > body_parser_ { nullptr };
+    std::unique_ptr<BodyParser> body_parser_ { nullptr };
 
 public:
     void set_request( const HTTPRequest & request );
