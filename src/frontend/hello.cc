@@ -41,19 +41,16 @@ void say_hello()
   request.read_in_body( "" );
   assert( request.state() == COMPLETE );
 
-  /* construct response parser */
-  /* we need to do this now, because it needs to know
-     what requests we have made in order to properly parse
-     the sequence of replies (e.g. the response to a HEAD
-     request won't have a body) */
-
-  HTTPResponseParser parser;
-
   /* send request */
   cerr << "Sending request... ";
   www.write( request.str() );
-  parser.new_request_arrived( request );
   cerr << "done.\n";
+
+  /* construct response parser */
+  HTTPResponseParser parser;
+
+  /* tell parser about the request */
+  parser.new_request_arrived( request );
 
   /* read reply */
   while ( not www.eof() ) {
