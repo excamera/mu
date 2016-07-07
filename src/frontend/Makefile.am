@@ -1,0 +1,6 @@
+AM_CPPFLAGS = $(CXX14_FLAGS)
+AM_CXXFLAGS = $(PICKY_CXXFLAGS)
+
+bin_PROGRAMS = hello
+
+hello_SOURCES = hello.cc
