@@ -12,7 +12,7 @@ static const string BASEURI_ = "/2015-03-31/functions/";
 static const string INVOKE_ = "/invocations";
 static const string REGION_ = "us-east-1";
 static const string SERVICE_ = "lambda";
-static const string HOST_ = "lambda.us-east-1.amazonaws.com";
+static const string HOST_ = SERVICE_ + "." + REGION_ + ".amazonaws.com";
 
 LambdaRequest::LambdaRequest(const string &fn_name,
                              const string &secret,

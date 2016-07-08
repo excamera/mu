@@ -12,12 +12,16 @@
 
 using namespace std;
 
-void say_hello();
+void say_hello(char *sname, char *sport);
 
-int main()
+int main(int argc, char **argv)
 {
   try {
-    say_hello();
+    if (argc > 2) {
+        say_hello(argv[1], argv[2]);
+    } else {
+        say_hello((char *)"www.example.com", (char *)"http");
+    }
   } catch ( const exception & e ) {
     print_exception( e );
     return EXIT_FAILURE;
@@ -26,11 +30,11 @@ int main()
   return EXIT_SUCCESS;
 }
 
-void say_hello()
+void say_hello(char *sname, char *sport)
 {
   /* open connection to server */
   TCPSocket www;
-  Address server { "www.example.com", "http" };
+  Address server { sname, sport };
   cerr << "Connecting to " << server.str() << "... ";
   www.connect( server );
   cerr << "done.\n";
