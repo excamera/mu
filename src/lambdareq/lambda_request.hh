@@ -26,5 +26,5 @@ class LambdaRequest {
                   const std::string &qualifier = "",
                   const InvocationType type = InvocationType::RequestResponse);
 
-    HTTPRequest to_http_request(void);
+    HTTPRequest to_http_request(void) const;
 };

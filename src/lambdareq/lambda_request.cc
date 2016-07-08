@@ -62,7 +62,7 @@ LambdaRequest::x_amz_date_(const time_t &t) {
 }
 
 HTTPRequest
-LambdaRequest::to_http_request(void) {
+LambdaRequest::to_http_request(void) const {
     HTTPRequest req;
 
     // construct request
