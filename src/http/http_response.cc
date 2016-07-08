@@ -45,7 +45,7 @@ void HTTPResponse::calculate_expected_body_size()
         set_expected_body_size( false );
 
         /* Create body_parser_ with trailers_enabled if requied (RFC 2616 section 14.40) */
-        body_parser_ = unique_ptr<BodyParser>( new ChunkedBodyParser( has_header( "Trailer" ) ) );
+        body_parser_ = make_unique<ChunkedBodyParser>( has_header( "Trailer" ) );
     } else if ( (not has_header( "Transfer-Encoding" ) )
                 and has_header( "Content-Length" ) ) {
 
@@ -62,7 +62,7 @@ void HTTPResponse::calculate_expected_body_size()
         /* Rule 5 */
         set_expected_body_size( false );
 
-        body_parser_ = unique_ptr<BodyParser>( new Rule5BodyParser() );
+        body_parser_ = make_unique<Rule5BodyParser>();
     }
 }
 
