@@ -7,6 +7,8 @@
 
 using namespace std;
 
+static const string ALGORITHM_ = "AWS4-HMAC-SHA256";
+
 string
 AWSv4Sig::sha256buf_to_string_(const unsigned char *buf) {
     char sbuf[2*SHA256_DIGEST_LENGTH + 1];
@@ -97,13 +99,13 @@ AWSv4Sig::sign_request(const string &secret,
     string canon_req_hash = sha256_(req.str());
 
     // build up credential scope
-    req.clear();
+    req.str("");
     req << request_date.substr(0, 8) << '/' << region << '/' << service << "/aws4_request";
     string cred_scope = req.str();
 
     // build up string to sign
-    req.clear();
-    req << ALGORITHM_
+    req.str("");
+    req << ALGORITHM_ << '\n'
         << request_date << '\n'
         << cred_scope << '\n'
         << canon_req_hash;
@@ -121,7 +123,7 @@ AWSv4Sig::sign_request(const string &secret,
     string signature = sha256buf_to_string_(buf);
 
     // build up authorization header
-    req.clear();
+    req.str("");
     req << ALGORITHM_
         << " Credential=" << akid << '/' << cred_scope
         << ", SignedHeaders=" << signed_headers

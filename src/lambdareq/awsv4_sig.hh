@@ -11,7 +11,6 @@ class AWSv4Sig {
                                                     const std::string &service);
     static std::string sha256buf_to_string_(const unsigned char *buf);
     static std::string sha256_(const std::string &in);
-    static constexpr char ALGORITHM_[] = "AWS4-HMAC-SHA256\n";
 
   public:
     static void sign_request(const std::string &secret,

@@ -7,6 +7,8 @@
 #include "exception.hh"
 #include "http_request.hh"
 #include "http_response_parser.hh"
+#include "lambda_request.hh"
+#include "getenv.hh"
 
 using namespace std;
 
@@ -28,18 +30,17 @@ void say_hello()
 {
   /* open connection to server */
   TCPSocket www;
-  Address server { "www.unitedwifi.com", "http" };
+  Address server { "localhost", "http-alt" };
   cerr << "Connecting to " << server.str() << "... ";
   www.connect( server );
   cerr << "done.\n";
 
   /* prepare request */
-  HTTPRequest request;
-  request.set_first_line( "GET / HTTP/1.1" );
-  request.add_header( HTTPHeader( "Host", server.str() ) );
-  request.done_with_headers();
-  request.read_in_body( "" );
-  assert( request.state() == COMPLETE );
+  string fn_name = safe_getenv("LAMBDA_FUNCTION");
+  string secret = safe_getenv("AWS_SECRET_ACCESS_KEY");
+  string akid = safe_getenv("AWS_ACCESS_KEY_ID");
+  LambdaRequest lreq(fn_name, secret, akid);
+  HTTPRequest request = lreq.to_http_request();
 
   /* send request */
   cerr << "Sending request... ";
