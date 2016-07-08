@@ -18,6 +18,7 @@ AC_PROG_CXX
 AC_PROG_RANLIB
 
 # Checks for libraries.
+PKG_CHECK_MODULES([OpenSSL], [libssl libcrypto])
 
 # Checks for header files.
 
@@ -32,6 +33,7 @@ AC_CONFIG_FILES([
 	src/net/Makefile
 	src/http/Makefile
 	src/frontend/Makefile
+    src/lambdareq/Makefile
 	src/tests/Makefile])
 
 AC_OUTPUT

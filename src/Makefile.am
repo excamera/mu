@@ -1,1 +1,1 @@
-SUBDIRS = util net http frontend tests
+SUBDIRS = util net http lambdareq frontend tests
