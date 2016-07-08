@@ -30,7 +30,7 @@ void say_hello()
 {
   /* open connection to server */
   TCPSocket www;
-  Address server { "localhost", "http-alt" };
+  Address server { "www.example.com", "http" };
   cerr << "Connecting to " << server.str() << "... ";
   www.connect( server );
   cerr << "done.\n";
