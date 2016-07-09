@@ -4,6 +4,7 @@
 #include <cstdlib>
 
 #include "socket.hh"
+#include "secure_socket.hh"
 #include "exception.hh"
 #include "http_request.hh"
 #include "http_response_parser.hh"
@@ -20,7 +21,7 @@ int main(int argc, char **argv)
     if (argc > 2) {
         say_hello(argv[1], argv[2]);
     } else {
-        say_hello((char *)"www.example.com", (char *)"http");
+        say_hello((char *)"www.example.com", (char *)"https");
     }
   } catch ( const exception & e ) {
     print_exception( e );
@@ -33,10 +34,16 @@ int main(int argc, char **argv)
 void say_hello(char *sname, char *sport)
 {
   /* open connection to server */
-  TCPSocket www;
+  TCPSocket sock;
   Address server { sname, sport };
   cerr << "Connecting to " << server.str() << "... ";
-  www.connect( server );
+  sock.connect( server );
+  cerr << "done.\n";
+
+  SSLContext ctx;
+  cerr << "Setting up SSL connection... ";
+  SecureSocket www = ctx.new_secure_socket(move(sock));
+  www.connect();
   cerr << "done.\n";
 
   /* prepare request */

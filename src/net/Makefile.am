@@ -5,4 +5,5 @@ noinst_LIBRARIES = libnet.a
 
 libnet_a_SOURCES = file_descriptor.hh file_descriptor.cc \
                    socket.cc socket.hh \
-                   address.cc address.hh
+                   address.cc address.hh \
+				   secure_socket.cc secure_socket.hh
