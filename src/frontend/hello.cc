@@ -50,11 +50,14 @@ void say_hello(char *sname, char *sport)
   string fn_name = safe_getenv("LAMBDA_FUNCTION");
   string secret = safe_getenv("AWS_SECRET_ACCESS_KEY");
   string akid = safe_getenv("AWS_ACCESS_KEY_ID");
-  LambdaRequest lreq(fn_name, secret, akid);
-  HTTPRequest request = lreq.to_http_request();
+  LambdaInvocation ll(secret, akid, fn_name);
+  //LambdaListFunctions ll(secret, akid);
+  //LambdaListFnVersions ll(secret, akid, fn_name);
+  HTTPRequest request = ll.to_http_request();
 
   /* send request */
-  cerr << "Sending request... ";
+  cerr << "Sending request:\n";
+  cerr << request.str() << '\n';
   www.write( request.str() );
   cerr << "done.\n";
 

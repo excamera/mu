@@ -54,7 +54,8 @@ AWSv4Sig::derive_signing_key_(const string &secret,
 }
 
 void
-AWSv4Sig::sign_request(const string &secret,
+AWSv4Sig::sign_request(const string &method,
+                       const string &secret,
                        const string &akid,
                        const string &region,
                        const string &service,
@@ -65,7 +66,7 @@ AWSv4Sig::sign_request(const string &secret,
                        map<string, string> &headers) {
     // begin building canonical request
     stringstream req;
-    req << "POST\n"
+    req << method << '\n'
         << request_uri << '\n'
         << query_string << '\n';
 

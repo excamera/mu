@@ -13,7 +13,8 @@ class AWSv4Sig {
     static std::string sha256_(const std::string &in);
 
   public:
-    static void sign_request(const std::string &secret,
+    static void sign_request(const std::string &method,
+                             const std::string &secret,
                              const std::string &akid,
                              const std::string &region,
                              const std::string &service,
