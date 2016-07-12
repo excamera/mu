@@ -114,6 +114,7 @@ void launchser(int nlaunch) {
             parser.parse( www[i].read() );
 
             if ( not parser.empty() ) {
+                /*
                 cerr << "Got reply.\n";
                 const HTTPResponse & response = parser.front();
                 for ( unsigned int i = 0; i < response.headers().size(); i++ ) {
@@ -126,6 +127,7 @@ void launchser(int nlaunch) {
                 cout << "\n[end of body]\n";
 
                 // done with this one
+                */
                 parser.pop();
                 www[i].close();
                 break;
