@@ -46,6 +46,7 @@ public:
 
     /* explicit close (since can throw an exception) */
     void close();
+    void set_blocking(bool b);
 
     /* forbid copying FileDescriptor objects or assigning them */
     FileDescriptor( const FileDescriptor & other ) = delete;

@@ -45,6 +45,18 @@ void FileDescriptor::close()
     fd_ = -1;
 }
 
+void
+FileDescriptor::set_blocking(bool b) {
+    int flags = SystemCall("fcntl F_GETFL", fcntl(fd_, F_GETFL));
+    if (b) {
+        flags = flags & ~O_NONBLOCK;
+    } else {
+        flags = flags | O_NONBLOCK;
+    }
+
+    SystemCall("fcntl F_SETFL", fcntl(fd_, F_SETFL, flags));
+}
+
 /* destructor */
 FileDescriptor::~FileDescriptor()
 {
