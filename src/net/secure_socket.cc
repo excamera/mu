@@ -110,7 +110,7 @@ SecureSocket SSLContext::new_secure_socket( TCPSocket && sock )
 
 void SecureSocket::connect( void )
 {
-    if ( not SSL_connect( ssl_.get() ) ) {
+    if ( SSL_connect( ssl_.get() ) != 1 ) {
         throw ssl_error( "SSL_connect" );
     }
 }
