@@ -19,5 +19,5 @@ while nreps > 0:
     (msg, (addr, port)) = s.recvfrom(16)
     t = time.time()
     print "%s :: %s:%d :: %f" % (msg, addr, port, t)
-    print >> sys.stderr, "%s :: %s:%d :: %f" % (msg, addr, port, t)
+    #print >> sys.stderr, "%s :: %s:%d :: %f" % (msg, addr, port, t)
     nreps -= 1

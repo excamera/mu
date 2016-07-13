@@ -2,6 +2,7 @@
 
 import re
 import sys
+import matplotlib.patches as mpat
 import matplotlib.pyplot as plt
 
 #                    start/finish:   id#             IP address                   port           time
@@ -67,6 +68,10 @@ if __name__ == "__main__":
     bottom = []
     height = []
     xpos = []
+    colors = []
+    barcolors = ['blue', 'green', 'red', 'cyan', 'magenta', 'black', 'yellow']
+    barregions = ['Oregon', 'Virginia', 'Ireland', 'Frankfurt', 'Tokyo', 'Sydney', 'error']
+    show_error = False
     for (idx, ent) in enumerate(logSorted):
         if 'finish' not in log[ent]:
             log[ent].setdefault('finish', []).append(log[ent]['start '][0] + 5)
@@ -78,11 +83,22 @@ if __name__ == "__main__":
         startmean = average(log[ent]['start '])
         stopmean = average(log[ent]['finish'])
         barheight = stopmean - startmean
-        xpos.append(idx+0.6)
+        xpos.append(idx+0.5)
         bottom.append(startmean)
         height.append(barheight)
+        colnum = int(int(ent)/100000)
+        if colnum < 0 or colnum > 5:
+            show_error = True
+            colnum = 6
+        colors.append(barcolors[colnum])
 
-    bars = plt.bar(xpos, height, 0.8, bottom, color='gray')
+    patches = []
+    for i in range(0,len(barcolors)):
+        if i < 6 or show_error:
+            patches.append(mpat.Patch(color=barcolors[i], label=barregions[i]))
+
+    plt.legend(handles=patches, loc=2)
+    bars = plt.bar(xpos, height, 1, bottom, color=colors, edgecolor="none")
     plt.title('Lambda jobs')
     plt.xlabel('jobs (sorted by start time)')
     plt.ylabel('job start and stop time')
@@ -93,4 +109,4 @@ if __name__ == "__main__":
     #    height = b.get_height()
     #    plt.text(b.get_x() + b.get_width()/2, b.get_y() + b.get_height() + 0.1, logSorted[i], ha='center', va='bottom', rotation='vertical')
 
-    plt.savefig('%s.png' % sys.argv[1], dpi=150)
+    plt.savefig('%s.pdf' % sys.argv[1], dpi=300)
