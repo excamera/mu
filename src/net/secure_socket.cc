@@ -176,3 +176,8 @@ void SecureSocket::close(void) {
     SSL_shutdown( ssl_.get() );
     TCPSocket::close();
 }
+
+void SecureSocket::set_hostname(const string &hostname) {
+    // XXX shouldn't ignore this return value
+    SSL_set_tlsext_host_name(ssl_.get(), (char *)hostname.c_str());
+}
