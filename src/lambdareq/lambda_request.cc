@@ -17,14 +17,17 @@ static const string BASEURI_ = "/2015-03-31/functions/";
 
 LambdaListFnVersions::LambdaListFnVersions(const string &secret,
                                            const string &akid,
-                                           const string &fn_name)
+                                           const string &fn_name,
+                                           const string &region)
     : LambdaRequest ( {BASEURI_ + fn_name + "/versions"}
                     , {}
                     , secret
                     , akid
                     , {}
+                    , region
                     , {}
-                    , false )
+                    , false
+                    )
 {
     add_authorization();
 }
@@ -34,14 +37,17 @@ LambdaListFnVersions::LambdaListFnVersions(const string &secret,
  */
 
 LambdaListFunctions::LambdaListFunctions(const string &secret,
-                                         const string &akid)
+                                         const string &akid,
+                                         const string &region)
     : LambdaRequest ( string(BASEURI_)
                     , {}
                     , secret
                     , akid
                     , {}
+                    , region
                     , {}
-                    , false )
+                    , false
+                    )
 {
     add_authorization();
 }
@@ -55,16 +61,19 @@ LambdaInvocation::LambdaInvocation(const string &secret,
                                    const string &fn_name,
                                    const string &payload,
                                    const string &qualifier,
-                                   InvocationType type)
+                                   const InvocationType type,
+                                   const string &region)
     : LambdaRequest ( {BASEURI_ + fn_name + "/invocations"}
                     , {}
                     , secret
                     , akid
                     , payload
+                    , region
                     , { {"x-amz-invocation-type", "RequestResponse"}
                       , {"content-type", "application/x-amz-json-1.0"}
                       , {"content-length", to_string(payload.length())}
                       }
+                    , true
                     )
 {
     // invocation type header update, if necessary
@@ -91,15 +100,14 @@ LambdaInvocation::LambdaInvocation(const string &secret,
  * LambdaRequest
  */
 
-static const string REGION_ = "us-east-1";
 static const string SERVICE_ = "lambda";
-static const string HOST_ = SERVICE_ + "." + REGION_ + ".amazonaws.com";
 
 LambdaRequest::LambdaRequest (string &&uri,
                               const string &query,
                               const string &secret,
                               const string &akid,
                               const string &payload,
+                              const string &region,
                               map<string, string> &&headers,
                               bool post)
     : request_date_ (x_amz_date_(time(0)))
@@ -109,11 +117,12 @@ LambdaRequest::LambdaRequest (string &&uri,
     , akid_ (akid)
     , payload_ (payload)
     , method_ (post ? "POST" : "GET")
+    , region_ (region)
     , headers_ (headers)
 {
     // insert basic headers
     headers_["x-amz-date"] = request_date_;
-    headers_["host"] = HOST_;
+    headers_["host"] = SERVICE_ + "." + region_ + ".amazonaws.com";
 }
 
 string
@@ -125,7 +134,7 @@ LambdaRequest::x_amz_date_(const time_t &t) {
 
 void
 LambdaRequest::add_authorization(void) {
-    AWSv4Sig::sign_request(method_, secret_, akid_, REGION_, SERVICE_, request_uri_,
+    AWSv4Sig::sign_request(method_, secret_, akid_, region_, SERVICE_, request_uri_,
                            request_date_, query_string_, payload_, headers_);
 }
 

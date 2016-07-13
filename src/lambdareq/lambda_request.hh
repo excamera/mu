@@ -16,6 +16,7 @@ class LambdaRequest {
     std::string akid_;
     std::string payload_;
     std::string method_;
+    std::string region_;
     std::map<std::string, std::string> headers_;
     void add_authorization(void);
 
@@ -26,6 +27,7 @@ class LambdaRequest {
                   const std::string &secret,
                   const std::string &akid,
                   const std::string &payload,
+                  const std::string &region,
                   std::map<std::string, std::string> &&headers,
                   bool post = true);
 };
@@ -39,18 +41,21 @@ class LambdaInvocation : public LambdaRequest {
                      const std::string &fn_name,
                      const std::string &payload = "{}",
                      const std::string &qualifier = "",
-                     const InvocationType type = InvocationType::RequestResponse);
+                     const InvocationType type = InvocationType::RequestResponse,
+                     const std::string &region = "us-east-1");
 };
 
 class LambdaListFunctions : public LambdaRequest {
   public:
     LambdaListFunctions(const std::string &secret,
-                        const std::string &akid);
+                        const std::string &akid,
+                        const std::string &region = "us-east-1");
 };
 
 class LambdaListFnVersions : public LambdaRequest {
   public:
     LambdaListFnVersions(const std::string &secret,
                          const std::string &akid,
-                         const std::string &fn_name);
+                         const std::string &fn_name,
+                         const std::string &region = "us-east-1");
 };
