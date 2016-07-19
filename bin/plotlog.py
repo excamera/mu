@@ -27,8 +27,12 @@ def process_log_line(line, log, basetime=None):
     ll = log.setdefault(ser, {})
     # check that IP and port line up
     if 'ip' in ll:
-        assert(ll['ip'] == ip)
-        assert(ll['port'] == port)
+        if ip != ll['ip']:
+            print >> sys.stderr, 'WARNING: (%s) found IP %s when expecting %s (ignoring this line)' % (ser, ip, ll['ip'])
+            return retval
+        if ll['port'] != port:
+            print >> sys.stderr, 'WARNING: (%s) found port %s when expecting %s (ignoring this line)' % (ser, port, ll['port'])
+            return retval
     else:
         # record IP and port
         ll['ip'] = ip
@@ -71,7 +75,7 @@ if __name__ == "__main__":
     colors = []
     barcolors = ['blue', 'green', 'red', 'cyan', 'magenta', 'black', 'yellow']
     barregions = ['Oregon', 'Virginia', 'Ireland', 'Frankfurt', 'Tokyo', 'Sydney', 'error']
-    show_error = False
+    showcolor = [False] * len(barcolors)
     for (idx, ent) in enumerate(logSorted):
         if 'finish' not in log[ent]:
             log[ent].setdefault('finish', []).append(log[ent]['start '][0] + 5)
@@ -88,13 +92,13 @@ if __name__ == "__main__":
         height.append(barheight)
         colnum = int(int(ent)/100000)
         if colnum < 0 or colnum > 5:
-            show_error = True
             colnum = 6
+        showcolor[colnum] = True
         colors.append(barcolors[colnum])
 
     patches = []
     for i in range(0,len(barcolors)):
-        if i < 6 or show_error:
+        if showcolor[i]:
             patches.append(mpat.Patch(color=barcolors[i], label=barregions[i]))
 
     plt.legend(handles=patches, loc=2)

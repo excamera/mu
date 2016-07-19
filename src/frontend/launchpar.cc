@@ -17,13 +17,16 @@
 using namespace std;
 
 void launchser(int nlaunch);
+SecureSocket new_connection(const Address &addr, const string &name, SSLContext &ctx);
 
 static const vector<string> lambda_regions = { {"us-west-2"}        // Oregon
                                              , {"us-east-1"}        // Virginia
+                                             /*
                                              , {"eu-west-1"}        // Ireland
                                              , {"eu-central-1"}     // Frankfurt
                                              , {"ap-northeast-1"}   // Tokyo
                                              , {"ap-southeast-2"}   // Sydney
+                                             */
                                              };
 
 int main(int argc, char **argv)
@@ -67,43 +70,47 @@ void launchser(int nlaunch) {
     cerr << "done.\n";
 
     // open connections to server
-    cerr << "Opening sockets...";
     vector<vector<SecureSocket>> www;
-    vector<vector<bool>> sfins;
-    SSLContext ctx;
-    for (unsigned j = 0; j < lambda_regions.size(); j++) {
-        string servername = "lambda." + lambda_regions[j] + ".amazonaws.com";
-        Address server {servername, "https"};
-        www.emplace_back(vector<SecureSocket>());
-        sfins.emplace_back(vector<bool> (nlaunch, false));
-        for (int i = 0; i < nlaunch; i++) {
-            TCPSocket sock;
-            sock.set_blocking(false);
-            try {
-                sock.connect( server );
-            } catch (const exception &e) {
-                // it's OK, we expected this
-            }
-            SecureSocket this_www = ctx.new_secure_socket(move(sock));
-            this_www.set_hostname(servername);
-            www[j].emplace_back(move(this_www));
-        }
-    }
-
-    // let all the connections happen
-    // yes this is ugly
+    cerr << "Opening sockets...";
     {
+        vector<vector<bool>> sfins;
+        vector<string> servername;
+        vector<Address> server;
+        SSLContext ctx;
+        for (int i = 0; i < nlaunch; i++) {
+            for (unsigned j = 0; j < lambda_regions.size(); j++) {
+                if (i == 0) {
+                    servername.emplace_back(string("lambda." + lambda_regions[j] + ".amazonaws.com"));
+                    server.emplace_back(Address(servername[j], "https"));
+                    www.emplace_back(vector<SecureSocket>());
+                    sfins.emplace_back(vector<bool> (nlaunch, false));
+                }
+
+                www[j].emplace_back(move(new_connection(server[j], servername[j], ctx)));
+            }
+        }
+
+        // let all the connections happen
+        // yes this is ugly
         bool all_done = false;
-        while (! all_done) {
+        for (int l = 0; ! all_done; l++) {
             bool found = false;
             for (unsigned j = 0; j < lambda_regions.size(); j++) {
                 for (int i = 0; i < nlaunch; i++) {
                     if (! sfins[j][i]) {
-                        try {
-                            www[j][i].connect();
-                        } catch (const exception &e) {
+                        int ret = 0;
+                        www[j][i].getsockopt(SOL_SOCKET, SO_ERROR, ret);
+                        if (ret) {
+                            cerr << '!';
                             found = true;
                             continue;
+                        } else {
+                            try {
+                                www[j][i].connect();
+                            } catch (...) {
+                                found = true;
+                                continue;
+                            }
                         }
                         sfins[j][i] = true;
                     }
@@ -167,4 +174,18 @@ void launchser(int nlaunch) {
             }
         }
     }
+}
+
+SecureSocket new_connection(const Address &addr, const string &name, SSLContext &ctx) {
+    TCPSocket sock;
+    sock.set_blocking(false);
+    try {
+        sock.connect(addr);
+    } catch (const exception &e) {
+        // it's OK, we expected this
+    }
+    SecureSocket this_www = ctx.new_secure_socket(move(sock));
+    this_www.set_hostname(name);
+
+    return this_www;
 }

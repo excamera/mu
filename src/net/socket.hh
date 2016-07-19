@@ -23,6 +23,7 @@ protected:
     /* construct from file descriptor */
     Socket( FileDescriptor && s_fd, const int domain, const int type );
 
+public:
     /* get and set socket option */
     template <typename option_type>
     socklen_t getsockopt( const int level, const int option, option_type & option_value ) const;
@@ -30,7 +31,6 @@ protected:
     template <typename option_type>
     void setsockopt( const int level, const int option, const option_type & option_value );
 
-public:
     /* bind socket to a specified local address (usually to listen/accept) */
     void bind( const Address & address );
 
