@@ -47,16 +47,37 @@ fi
 #
 # make sure needed executables are available
 #
-which aws &>/dev/null
+type -p aws &>/dev/null
 if [ $? != 0 ]; then
     echo "Could not find aws executable in your path."
     echo "Hint: try \`apt-get install awscli\` and then \`aws configure\`"
     exit 1
 fi
-which zip &>/dev/null
+type -p zip &>/dev/null
 if [ $? != 0 ]; then
     echo "Could not find zip executable in your path."
     echo "Hint: try \`apt-get install zip\`"
+    exit 1
+fi
+type -p head &>/dev/null
+if [ $? != 0 ]; then
+    echo "Could not find head executable in your path."
+    echo "Hint: try \`apt-get install coreutils\`"
+    exit 1
+fi
+type -p readlink &>/dev/null
+if [ $? != 0 ]; then
+    echo "Could not find readlink executable in your path."
+    echo "Hint: try \`apt-get install coreutils\`"
+    exit 1
+fi
+
+#
+# find the lambda template file
+#
+LAMBDA_FILE_TEMPLATE=$(readlink -f "$(dirname "$0")"/lambda_function_template.py)
+if [ $? != 0 ] || [ ! -f "$LAMBDA_FILE_TEMPLATE" ]; then
+    echo "Cannot find "$LAMBDA_FILE_TEMPLATE". Giving up."
     exit 1
 fi
 
@@ -125,30 +146,7 @@ shift
 #
 # build lambda_function.py
 #
-cat > "$LAMBDA_FILE" <<EOF
-import subprocess
-
-def lambda_handler(event, context):
-    cmdstring = executable
-
-    # add environment variables
-    if 'vars' in event:
-        for v in event['vars']:
-            cmdstring = v + ' ' + cmdstring
-
-    # add arguments
-    if 'args' in event:
-        for a in event['args']:
-            cmdstring = cmdstring + ' ' + a
-
-    # run the command
-    output = subprocess.check_output([cmdstring], shell=True, stderr=subprocess.STDOUT)
-
-    # log the output and also return it
-    print output
-    return output
-
-EOF
+head -n -1 "$LAMBDA_FILE_TEMPLATE" > "$LAMBDA_FILE"
 echo 'executable = """'"$PRE_ARGS"' ./'"$WORKFILE"' '"$1"'"""' >> "$LAMBDA_FILE"
 shift
 
@@ -156,7 +154,7 @@ shift
 # copy the rest of the arguments into the bundle
 #
 for i in "$@"; do
-    cp "$i" "$TMPDIR"
+    cp -r "$i" "$TMPDIR"
 done
 
 #
