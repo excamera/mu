@@ -287,6 +287,7 @@ if USE_SSL:
     lsock = SSL.Connection(sslctx, lsock)
     lsock.set_accept_state()
 
+lsock.setblocking(False)
 states = []
 peers = []
 def handle_server_sock():
