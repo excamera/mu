@@ -19,9 +19,11 @@ using namespace std;
 void launchser(int nlaunch);
 SecureSocket new_connection(const Address &addr, const string &name, SSLContext &ctx);
 
-static const vector<string> lambda_regions = { {"us-west-2"}        // Oregon
-                                             , {"us-east-1"}        // Virginia
+static const string cacert = {"MIICSDCCAbGgAwIBAgIJANsD8uL26wB6MA0GCSqGSIb3DQEBCwUAMD0xCzAJBgNVBAYTAlVTMQswCQYDVQQIDAJOWTEOMAwGA1UECgwFZXZzc2wxETAPBgNVBAMMCGV2c3NsX2NhMB4XDTE2MDcyODE5MjYzMVoXDTI2MDcyNjE5MjYzMVowPTELMAkGA1UEBhMCVVMxCzAJBgNVBAgMAk5ZMQ4wDAYDVQQKDAVldnNzbDERMA8GA1UEAwwIZXZzc2xfY2EwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBALJqpBlSHh7CoDrLq4ppE/nrQJdrWUI6pB8SuvJIjIFUwk9oAqVWkoyG3urjWhbC0UF4h/puglAYDbEijfhoJpCeHTVEizTNu1AbrDAGeVQll2/VgsGdI/eH4rvxDNk3DDTcKKcZWIQGPKGror5MHDfrAPVKzuNNqkEomPuii1UDAgMBAAGjUDBOMB0GA1UdDgQWBBS2WSlhZSg+A/D7uUY8fqcJSpnBSzAfBgNVHSMEGDAWgBS2WSlhZSg+A/D7uUY8fqcJSpnBSzAMBgNVHRMEBTADAQH/MA0GCSqGSIb3DQEBCwUAA4GBAGYJB31CSqLMuT5xIuWjXR4IyKAYsplDenYmi05NkCOG99UDDBYILr71/lWSnAIh14I5DVbu5mEL6cwt+WM7nfaz/sKVyvjRhabGnLDvfbz2N34MOivCt7gOv3/mpXUnLwA/qAeXUMbBfxnu5x8skIICVy5WM5vz4VDmp2j7QCkH"};
+
+static const vector<string> lambda_regions = { {"us-east-1"}        // Oregon
                                              /*
+                                             , {"us-west-2"}        // Virginia
                                              , {"eu-west-1"}        // Ireland
                                              , {"eu-central-1"}     // Frankfurt
                                              , {"ap-northeast-1"}   // Tokyo
@@ -62,7 +64,8 @@ void launchser(int nlaunch) {
     for (unsigned j = 0; j < lambda_regions.size(); j++) {
         request.emplace_back(vector<HTTPRequest>());
         for (int i = 0; i < nlaunch; i++) {
-            string payload = "{\"id\":\"" + to_string(100000*j + i) + "\",\"addr\":\"" + ipaddr + "\",\"port\":\"" + ipport + "\"}";
+            string payload = "{\"mode\":\"1\",\"addr\":\"" + ipaddr + "\",\"port\":\"" + ipport + "\", \"cacert\":\"" + cacert + "\"}";
+            //string payload = "{\"mode\":\"1\",\"addr\":\"" + ipaddr + "\",\"port\":\"" + ipport + "\"}";
             LambdaInvocation ll(secret, akid, fn_name, payload, "", LambdaInvocation::InvocationType::Event, lambda_regions[j]);
             request[j].emplace_back(move(ll.to_http_request()));
         }
