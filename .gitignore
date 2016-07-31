@@ -1,5 +1,6 @@
 *.a
 *.o
+*.pyc
 
 Makefile
 Makefile.in

@@ -8,6 +8,7 @@
 set -o pipefail
 DEFAULT_MEM_SIZE=128
 DEFAULT_TIMEOUT=3
+EXTRA_PACKAGE_FILE=lambda_extra_packages.tar.gz
 SKIPLIBS=("linux-vdso" "libc" "libpthread" "ld-linux" "librt" "libdl")
 
 #
@@ -75,7 +76,8 @@ fi
 #
 # find the lambda template file
 #
-LAMBDA_FILE_TEMPLATE=$(readlink -f "$(dirname "$0")"/lambda_function_template.py)
+LAMBDAIZE_DIRNAME=$(readlink -f "$(dirname "$0")")
+LAMBDA_FILE_TEMPLATE="$LAMBDAIZE_DIRNAME"/lambda_function_template.py
 if [ $? != 0 ] || [ ! -f "$LAMBDA_FILE_TEMPLATE" ]; then
     echo "Cannot find "$LAMBDA_FILE_TEMPLATE". Giving up."
     exit 1
@@ -111,6 +113,22 @@ echo "Function name: $TMPDIR"
 #
 cp "$1" "$TMPDIR"
 shift
+
+#
+# "extra_packages" tarball and libmu
+#
+EXTRA_PACKAGES="$LAMBDAIZE_DIRNAME"/"$EXTRA_PACKAGE_FILE"
+if [ -f "$EXTRA_PACKAGES" ]; then
+    tar -C "$TMPDIR" -xzpf "$EXTRA_PACKAGES"
+    if [ $? != 0 ]; then
+        echo "ERROR: could not extract extra packages '""$EXTRA_PACKAGES""'"
+        exit 1
+    fi
+fi
+LIBMU_DIRECTORY="$LAMBDAIZE_DIRNAME"/libmu
+if [ -d "$LIBMU_DIRECTORY" ]; then
+    cp -R "$LIBMU_DIRECTORY" "$TMPDIR"
+fi
 
 #
 # if we're allowing dynamic libraries, copy over the libraries
@@ -154,7 +172,7 @@ shift
 # copy the rest of the arguments into the bundle
 #
 for i in "$@"; do
-    cp -r "$i" "$TMPDIR"
+    cp -R "$i" "$TMPDIR"
 done
 
 #
