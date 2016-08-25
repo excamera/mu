@@ -10,7 +10,7 @@
 using namespace std;
 
 // These are the ciphers we're willing to use. This is a pretty restrictive list.
-static const char SSL_CIPHERS_[] = "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-RC4-SHA:ECDHE-RSA-AES256-SHA:HIGH:!aNULL:!eNULL:!EXP:!LOW:!MEDIUM:!MD5";
+static const char SSL_CIPHERS_[] = "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA:HIGH:!aNULL:!eNULL:!EXP:!LOW:!MEDIUM:!MD5:!RC4:!DES:!3DES";
 
 /* error category for OpenSSL */
 class ssl_error_category : public error_category
