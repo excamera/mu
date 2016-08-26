@@ -8,13 +8,11 @@ addons:
     - ubuntu-toolchain-r-test
     packages:
     - g++-5
-    - python-openssl
 
 before_script:
   - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 99
-  - sudo -E add-apt-repository -y 'deb http://ftp.us.debian.org/debian unstable main contrib non-free'
-  - sudo apt-get update -qq
-  - sudo apt-get install -y --force-yes python-boto3
+  - sudo pip install boto3
+  - sudo pip install pyOpenSSL
 
 script:
   - ./autogen.sh
