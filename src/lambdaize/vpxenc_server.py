@@ -23,7 +23,7 @@ class VPXEncStateMachine(CommandListState):
                   , "set:outkey:{0}/out/{0}{1}.ivf"
                   , "retrieve:"
                   , "run:"
-                  , "upload:"
+                  , ("OK:RETVAL(0)", "upload:")
                   , "quit:"
                   ]
 
