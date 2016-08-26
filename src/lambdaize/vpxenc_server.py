@@ -91,10 +91,11 @@ def main(chainfile=None, keyfile=None):
         rs = []
         ws = []
         for st in sts:
-            if isinstance(st, TerminalState) or st.sock is None:
+            if st.sock is None:
                 continue
 
-            rs.append(st)
+            if not isinstance(st, TerminalState):
+                rs.append(st)
 
             if st.ssl_write or st.want_write:
                 ws.append(st)
@@ -102,11 +103,10 @@ def main(chainfile=None, keyfile=None):
         return (rs, ws)
 
     while True:
-        # if everyone is in a terminal state, we're done
-        if all([isinstance(state, TerminalState) for state in states]) and lsock is None:
-            break
-
         (readSocks, writeSocks) = rwsplit(states)
+
+        if len(readSocks) == 0 and len(writeSocks) == 0 and lsock is None:
+            break
 
         if lsock is not None:
             readSocks += [lsock]

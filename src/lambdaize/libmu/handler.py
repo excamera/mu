@@ -275,8 +275,8 @@ def do_connect(msg, vals):
         vals['cmdsock'].enqueue('FAIL(%s)' % str(cs))
         return True
     vals['nxtsock'] = cs
-    vals['cmdsock'].enqueue('OK:CONNECT(%d)' % msg)
 
+    vals['cmdsock'].enqueue('OK:CONNECT(%d)' % msg)
     return False
 
 ###
@@ -288,6 +288,7 @@ def do_close_connect(_, vals):
         ns.close()
         vals['nxtsock'] = None
 
+    vals['cmdsock'].enqueue('OK:CLOSE_CONNECT')
     return False
 
 ###
@@ -310,7 +311,7 @@ message_types = { 'set:': do_set
                 }
 def handle_message(msg, vals):
     if Defs.debug:
-        print "HANDLING %s" % msg
+        print "CLIENT HANDLING %s" % msg
 
     for mtype in message_types:
         if msg[:len(mtype)] == mtype:
@@ -319,3 +320,18 @@ def handle_message(msg, vals):
     # if we got here, we don't recognize the command
     vals['cmdsock'].enqueue("FAIL(no such command '%s')" % msg)
     return False
+
+message_responses = { 'set:': 'OK:SET'
+                    , 'seti:': 'OK:SETI'
+                    , 'get:': 'OK:GET'
+                    , 'geti:': 'OK:GETI'
+                    , 'dump_vals:': 'OK:DUMP_VALS'
+                    , 'retrieve:': 'OK:RETRIEVE'
+                    , 'upload:': 'OK:UPLOAD'
+                    , 'echo:': 'OK:ECHO'
+                    , 'run:': 'OK:R'
+                    , 'listen:': 'OK:LISTEN'
+                    , 'close_listen:': 'OK:CLOSE_LISTEN'
+                    , 'connect:': 'OK:CONNECT'
+                    , 'close_connect:': 'OK:CLOSE_CONNECT'
+                    }

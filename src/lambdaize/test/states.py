@@ -6,7 +6,7 @@ import os.path
 sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], os.pardir)))
 # insert parent directory in search path, since test/ lives alongside libmu
 
-from libmu import CommandListState, OnePassState, TerminalState, ErrorState, RunImmediateState, SuperpositionState, ForLoopState, InfoWatcherState, Defs
+from libmu import CommandListState, OnePassState, TerminalState, ErrorState, SuperpositionState, ForLoopState, InfoWatcherState, Defs
 
 import test.util as tutil
 
@@ -35,7 +35,7 @@ class FinishState(CommandListState):
     nextState = FinalState
     commandlist = [ ("OK:RETRIEVE", "run:diff /tmp/test.txt /tmp/test2.txt")
                   , ("OK:RETVAL(0)", "run:rm /tmp/test.txt /tmp/test2.txt")
-                  , ("OK:RETVAL(0)", "quit:")
+                  , "quit:"
                   ]
 
 class IWKicker(CommandListState):
@@ -65,7 +65,7 @@ class BlockSetState(OnePassState):
     expect = "OK:SETI"
     extra = "(setting blocking-run)"
 
-class ImmediateSetBState(RunImmediateState):
+class ImmediateSetBState(OnePassState):
     nextState = BlockSetState
     command = "seti:nonblock:0"
     extra = "(setting blocking-run)"

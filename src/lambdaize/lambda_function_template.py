@@ -88,6 +88,8 @@ def lambda_handler(event, _):
     while True:
         (_, rsocks, wsocks) = get_arwsocks(vals)
         if len(rsocks) == 0 and len(wsocks) == 0:
+            if Defs.debug:
+                print "***WARNING*** unclean client exit"
             break
 
         (rfds, wfds, _) = select.select(rsocks, wsocks, [], Defs.timeout)

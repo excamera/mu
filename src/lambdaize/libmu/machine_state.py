@@ -2,13 +2,14 @@
 
 import time
 
-import libmu.util
+from libmu.defs import Defs
+from libmu.handler import message_responses
 from libmu.socket_nb import SocketNB
+import libmu.util
 
 class MachineState(SocketNB):
     expect = None
     extra = "(base class)"
-    last_message = None
 
     def __init__(self, prevState, actorNum=0):
         super(MachineState, self).__init__(prevState)
@@ -26,6 +27,7 @@ class MachineState(SocketNB):
             self.timestamps = []
             self.info = {}
 
+        self.messages = []
         self.timestamps.append(time.time())
 
     def get_timestamps(self):
@@ -51,6 +53,8 @@ class MachineState(SocketNB):
         for msg in list(self.recv_queue):
         # use list(deque) so that we can modify the deque inside the iteration
             if msg[:4] == 'INFO':
+                if Defs.debug:
+                    print "SERVER HANDLING", msg
                 self.recv_queue.remove(msg)
 
                 vv = msg[5:].split(':', 1)
@@ -68,12 +72,17 @@ class MachineState(SocketNB):
         retries = []
         while state.want_handle:
             msg = state.dequeue()
+            if Defs.debug:
+                print "SERVER HANDLING", msg
             try:
                 state = state.transition(msg)
-                state.last_message = msg
             except ValueError:
+                if Defs.debug:
+                    print "SERVER REQUEUEING", msg
                 retries.append(msg)
 
+            if Defs.debug:
+                print repr(state)
             state.update_flags()
 
         # put any that were skipped back in the queue
@@ -121,9 +130,21 @@ class ErrorState(TerminalState):
 
 class OnePassState(MachineState):
     command = None
+    expect = None
     extra = "(one-pass state)"
     nextState = TerminalState
-    expect = "OK"
+
+    def __init__(self, prevState, actorNum=0):
+        super(OnePassState, self).__init__(prevState, actorNum)
+
+        if self.expect is None:
+            self.expect = libmu.util.rand_str(32)
+            self.kick()
+
+    def kick(self):
+        # schedule ourselves for immediate run
+        self.recv_queue.appendleft(self.expect)
+        self.want_handle = True
 
     def transition(self, msg):
         if msg[:len(self.expect)] != self.expect:
@@ -132,6 +153,11 @@ class OnePassState(MachineState):
         if self.command is not None:
             self.enqueue(self.command)
 
+        self.messages.append(msg)
+
+        return self.post_transition()
+
+    def post_transition(self):
         return self.nextState(self)
 
 class MultiPassState(MachineState):
@@ -144,8 +170,7 @@ class MultiPassState(MachineState):
         self.expects = []
 
     def transition(self, msg):
-        expect = self.expects[self.cmdNum]
-        if self.cmdNum >= len(self.commands) or msg[:len(expect)] != expect:
+        if self.cmdNum >= len(self.commands) or msg[:len(self.expects[self.cmdNum])] != self.expects[self.cmdNum]:
             return ErrorState(self, msg)
 
         # send message and transition
@@ -154,11 +179,20 @@ class MultiPassState(MachineState):
         if command is not None:
             self.enqueue(command)
 
+        self.messages.append(msg)
+
         if self.cmdNum >= len(self.commands):
             return self.nextState(self)
+        elif self.expects[self.cmdNum] is None:
+            self.expects[self.cmdNum] = libmu.util.rand_str(32)
+            self.kick()
         else:
             self.timestamps.append(time.time())
             return self
+
+    def kick(self):
+        self.recv_queue.appendleft(self.expects[self.cmdNum])
+        self.want_handle = True
 
     def str_extra(self):
         return "(waiting to send key #%d)" % self.cmdNum
@@ -173,39 +207,28 @@ class CommandListState(MultiPassState):
     def __init__(self, prevState, actorNum=0):
         super(CommandListState, self).__init__(prevState, actorNum)
         self.commands = [ cmd[1] if isinstance(cmd, tuple) else cmd for cmd in self.commandlist ]
-        self.expects = [ cmd[0] if isinstance(cmd, tuple) else "OK" for cmd in self.commandlist ]
 
-class RunImmediateState(OnePassState):
-    extra = "(immediate runner)"
+        # explicit expect if given, otherwise set expect based on previous command
+        self.expects = [ self.commandlist[0][0] if isinstance(self.commandlist[0], tuple) else "OK" ]
+        self.expects += [ cmd[0] if isinstance(cmd, tuple) else message_responses.get(pc, "OK")
+                          for (cmd, pc) in zip(self.commandlist[1:], self.commands[:-1]) ]
 
-    def __init__(self, prevState, actorNum=0):
-        super(RunImmediateState, self).__init__(prevState, actorNum)
-
-        ### transition immediately
-        # use a random string as self.expect to disambiguate superposition states
-        self.expect = libmu.util.rand_str(32)
-        self.recv_queue.appendleft(self.expect)
-        self.want_handle = True
-
-class IfElseState(RunImmediateState):
+class IfElseState(OnePassState):
     extra = "(ifelse state)"
     consequentState = TerminalState
     alternativeState = TerminalState
-
-    def __init__(self, prevState, actorNum=0):
-        super(IfElseState, self).__init__(prevState, actorNum)
 
     def testfn(self):
         # pylint: disable=no-self-use
         return True
 
-    def transition(self, _):
+    def post_transition(self):
         if self.testfn():
             return self.consequentState(self)
         else:
             return self.alternativeState(self)
 
-class ForLoopState(RunImmediateState):
+class ForLoopState(OnePassState):
     loopState = TerminalState
     exitState = TerminalState
 
@@ -222,7 +245,7 @@ class ForLoopState(RunImmediateState):
             self.info[self.iterKey] = self.iterInit
             self.info[self.breakKey] = False
 
-    def transition(self, _):
+    def post_transition(self):
         if self.info[self.iterKey] >= self.iterFin or self.info[self.breakKey]:
             del self.info[self.breakKey]
             return self.exitState(self)
@@ -302,16 +325,11 @@ class InfoWatcherState(OnePassState):
     extra = "(infowatcher)"
 
     def __init__(self, prevState, actorNum=0):
+        # need to set random expect string first to prevent OnePassState from kicking us
+        if self.expect is None:
+            self.expect = libmu.util.rand_str(32)
+
         super(InfoWatcherState, self).__init__(prevState, actorNum)
 
-        print "SERVER: infowatcher initialized"
-        ### set a random expect string
-        self.expect = libmu.util.rand_str(32)
-
-    def _kick(self):
-        # schedule ourselves for immediate run
-        self.recv_queue.appendleft(self.expect)
-        self.want_handle = True
-
     def info_updated(self):
-        self._kick()
+        self.kick()
