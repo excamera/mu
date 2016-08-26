@@ -17,7 +17,7 @@ import lambda_function_template
 
 
 def run_tests():
-    executable = "vpxenc --good -o ##OUTFILE## ##INFILE##"
+    lambda_function_template.executable = "vpxenc --good -o ##OUTFILE## ##INFILE##"
     Defs.debug = True
     pid = os.fork()
     if pid == 0:
@@ -52,10 +52,10 @@ def run_tests():
             print "Server exception:\n%s" % traceback.format_exc()
             sys.exit(1)
 
-        (_, status) = os.waitpid(pid, 0)
-        retval = status >> 8
-        if retval != 0:
-            print "ERROR: client process exited with retval %d" % retval
+        (_, st) = os.waitpid(pid, 0)
+        ret = st >> 8
+        if ret != 0:
+            print "ERROR: client process exited with retval %d" % ret
             sys.exit(1)
         else:
             print "Server exiting."

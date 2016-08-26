@@ -5,7 +5,6 @@ import sys
 import os.path
 sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], os.pardir)))
 # insert parent directory in search path, since test/ lives alongside libmu
-import traceback
 
 from libmu import CommandListState, OnePassState, TerminalState, ErrorState, RunImmediateState, SuperpositionState, ForLoopState, InfoWatcherState, Defs
 
