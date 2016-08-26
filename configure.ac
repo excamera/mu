@@ -33,7 +33,8 @@ AC_CONFIG_FILES([
 	src/net/Makefile
 	src/http/Makefile
 	src/frontend/Makefile
-    src/lambdareq/Makefile
+	src/lambdareq/Makefile
+	src/lambdaize/Makefile
 	src/tests/Makefile])
 
 AC_OUTPUT
