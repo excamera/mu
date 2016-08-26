@@ -8,7 +8,7 @@ addons:
     - ubuntu-toolchain-r-test
     packages:
     - g++-5
-    - python-openssl
+    - vpx-tools
 
 before_script:
   - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 99
@@ -20,6 +20,9 @@ script:
   - ./autogen.sh
   - ./configure
   - make -j3 distcheck
+
+after_success:
+  - cat mu-0.01/_build/src/tests/test-suite.log
 
 after_failure:
   - cat mu-0.01/_build/src/tests/test-suite.log
