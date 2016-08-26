@@ -21,9 +21,6 @@ script:
   - ./configure
   - make -j3 distcheck
 
-after_success:
-  - cat mu-0.01/_build/src/tests/test-suite.log
-
 after_failure:
   - cat mu-0.01/_build/src/tests/test-suite.log
 

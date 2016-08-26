@@ -1,3 +1,4 @@
 #!/bin/sh
 
-exec /usr/bin/python2.7 "${srcdir}"/../lambdaize/test
+/usr/bin/python2.7 "${srcdir}"/../lambdaize/test
+exit 1
