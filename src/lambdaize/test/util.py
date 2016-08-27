@@ -85,10 +85,13 @@ def run_one_test(test_server, executable, use_ssl, run_nonblock, *args, **kwargs
 
         del cs
 
-        (_, status) = os.waitpid(pid, 0)
-        retval = status >> 8
-        if retval != 0:
-            print "ERROR: client process exited with retval %d" % retval
-            sys.exit(1)
-        else:
-            print "Server exiting."
+        server_finish_check_retval(pid)
+
+def server_finish_check_retval(pid):
+    (_, status) = os.waitpid(pid, 0)
+    retval = status >> 8
+    if retval != 0:
+        print "ERROR: client process exited with retval %d" % retval
+        sys.exit(1)
+    else:
+        print "Server exiting."

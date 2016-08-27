@@ -7,11 +7,10 @@ import sys
 
 from OpenSSL import SSL
 
-from libmu import Defs, TerminalState, CommandListState, MachineState
+from libmu import Defs, ErrorState, TerminalState, CommandListState, MachineState
 
 class FinalState(TerminalState):
-    def str_extra(self):
-        return "(finished)"
+    extra = "(finished)"
 
 class VPXEncStateMachine(CommandListState):
     nextState = FinalState
@@ -143,9 +142,15 @@ def main(chainfile=None, keyfile=None):
 
             states[rnum] = rnext
 
+    error = False
     for state in states:
         state.close()
         print str(state.get_timestamps())
+        if isinstance(state, ErrorState):
+            error = True
+
+    if error:
+        raise Exception("ERROR: worker terminated abnormally.")
 
 if __name__ == "__main__":
     main()

@@ -7,10 +7,10 @@ import traceback
 
 import boto3
 
-import libmu
-from libmu.socket_nb import SocketNB
-from libmu.fd_wrapper import FDWrapper
 from libmu.defs import Defs
+from libmu.fd_wrapper import FDWrapper
+from libmu.socket_nb import SocketNB
+import libmu.util
 
 s3_client = boto3.client('s3')
 

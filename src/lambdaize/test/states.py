@@ -28,8 +28,7 @@ import test.util as tutil
 #
 
 class FinalState(TerminalState):
-    def str_extra(self):
-        return "(finished)"
+    extra = "(finished)"
 
 class FinishState(CommandListState):
     nextState = FinalState

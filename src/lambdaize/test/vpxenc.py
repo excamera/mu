@@ -9,6 +9,7 @@ import traceback
 
 from libmu import Defs
 
+import test.util
 from test.defs import Defs as Td
 
 import vpxenc_server
@@ -17,7 +18,7 @@ import lambda_function_template
 
 
 def run_tests():
-    lambda_function_template.executable = "vpxenc --good -o ##OUTFILE## ##INFILE##"
+    lambda_function_template.executable = "vpxenc --quiet --good -o ##OUTFILE## ##INFILE##"
     Defs.debug = True
     pid = os.fork()
     if pid == 0:
@@ -52,13 +53,7 @@ def run_tests():
             print "Server exception:\n%s" % traceback.format_exc()
             sys.exit(1)
 
-        (_, st) = os.waitpid(pid, 0)
-        ret = st >> 8
-        if ret != 0:
-            print "ERROR: client process exited with retval %d" % ret
-            sys.exit(1)
-        else:
-            print "Server exiting."
+        test.util.server_finish_check_retval(pid)
 
 if __name__ == "__main__":
     run_tests()
