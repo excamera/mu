@@ -102,9 +102,8 @@ def make_cmdstring(_, vals):
         command += ' ' + ' '.join(useargs)
 
     usequality = vals_lookup('quality', False)
-    if usequality is None:
-        usequality = 0.9
-    command = command.replace("##QUALITY##", str(usequality))
+    if usequality is not None:
+        command = command.replace("##QUALITY##", usequality)
 
     # ##INFILE## and ##OUTFILE## string replacement
     useinfile = vals_lookup('infile', False)
