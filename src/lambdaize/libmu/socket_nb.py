@@ -42,6 +42,9 @@ class SocketNB(object):
     def getsockname(self):
         return self.getsockname()
 
+    def getpeername(self):
+        return self.getpeername()
+
     @staticmethod
     def shutdown(*_):
         pass

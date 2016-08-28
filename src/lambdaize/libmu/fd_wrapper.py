@@ -48,5 +48,9 @@ class FDWrapper(object):
         return self.fd
 
     @staticmethod
+    def getpeername():
+        return (None, None)
+
+    @staticmethod
     def getsockname():
         return (None, None)

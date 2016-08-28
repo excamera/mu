@@ -162,6 +162,7 @@ class OnePassState(MachineState):
 
 class MultiPassState(MachineState):
     nextState = TerminalState
+    extra = "(multi-pass state)"
 
     def __init__(self, prevState, actorNum=0):
         super(MultiPassState, self).__init__(prevState, actorNum)
@@ -195,7 +196,7 @@ class MultiPassState(MachineState):
         self.want_handle = True
 
     def str_extra(self):
-        return "(waiting to send key #%d)" % self.cmdNum
+        return "(%s (key #%d))" % (self.extra, self.cmdNum)
 
     def get_expect(self):
         return self.expects[self.cmdNum]

@@ -197,51 +197,13 @@ def do_run(msg, vals):
 
     return _background(ret_helper, vals, 'OK:RUNNING(%s)' % cmdstring)
 
-#     # run command
-#     sock = None
-#     if vals['nonblock']:
-#         # non-blocking mode
-#         (r, w) = os.pipe()
-#         pid = os.fork()
-#         if pid != 0:
-#             # in the parent process
-#             os.close(w)
-#             sock = FDWrapper(r)
-#             sock.set_blocking(False)
-#             vals['runpid'] = pid
-#             vals['runsock'] = SocketNB(sock)
-#             vals['cmdsock'].enqueue("OK:RUNNING(%s)" % cmdstring)
-#             return False
-#
-#         else:
-#             # in the child process
-#             os.close(r)
-#             sock = FDWrapper(w)
-#
-#     if sock is None:
-#         # finished running the command in blocking mode
-#         cmdsock = vals.get('cmdsock')
-#         if cmdsock is not None:
-#             # we only have a socket in command mode
-#             cmdsock.enqueue('OK:RETVAL(%d):OUTPUT(%s):COMMAND(%s)' % (retval, output, cmdstring))
-#             return False
-#         else:
-#             print output
-#             return output
-#
-#     else:
-#         # finished running the command in non-blocking mode
-#         msg = SocketNB.format_message("%s\0%s" % (cmdstring, output))
-#         sock.send(msg)
-#         sock.close()
-#         sys.exit(retval)
-
 ###
 #  listen for peer lambda
 ###
 def do_listen(_, vals):
-    # only listen if the current socket is nonexistent
-    do_close_listen(None, vals)
+    if vals.get('lsnsock') is not None:
+        vals['cmdsock'].enqueue("FAIL(already listening)")
+        return False
 
     # SSLize it if necessary
     try:
@@ -259,6 +221,8 @@ def do_listen(_, vals):
     # record information and send back to master
     (_, vals['lsnport']) = ls.getsockname()
     vals['lsnsock'] = ls
+
+    vals['cmdsock'].enqueue('INFO:lsnport:%d' % vals['lsnport'])
     vals['cmdsock'].enqueue('OK:LISTEN(%d)' % vals['lsnport'])
 
     return False
@@ -280,6 +244,7 @@ def do_close_listen(_, vals):
     if vals.get('lsnport') is not None:
         del vals['lsnport']
 
+    vals['cmdsock'].enqueue("OK:CLOSE_LISTEN")
     return False
 
 ###
@@ -288,6 +253,7 @@ def do_close_listen(_, vals):
 def do_connect(msg, vals):
     if vals.get('nxtsock') is None:
         # already connected
+        vals['cmdsock'].enqueue("FAIL(already connected)")
         return False
 
     try:

@@ -1,8 +1,10 @@
 #!/usr/bin/python
 
+import base64
 import os
 import select
 import socket
+import zlib
 
 from OpenSSL import SSL
 
@@ -12,17 +14,46 @@ from libmu import SocketNB, Defs, util, handler
 #  accept new connection from listening socket
 ###
 def accept_new_connection(vals):
-    if vals.get('prvsock') is not None:
+    if vals.get('prvsock') is not None and vals.get('prvsock').sock is not None:
         util.accept_socket(vals['lsnsock']).close()
     else:
         vals['prvsock'] = util.accept_socket(vals['lsnsock'])
 
 ###
+#  state passed into the make_cmdstring function
+###
+class WorkerState(object):
+    prev_iter = 0
+    # If we were (more) deranged, we'd just use
+    #     client_state = type('', (object,), {'prev_iter': None})()
+    # Yes, you can construct an anonymous class!
+
+###
 #  send state file to nxtsock
 ###
-def handle_async_return(*_):
-    # XXX do something here
-    pass
+def send_output_state(vals):
+    with open("/tmp/final.state", 'r') as f:
+        indata = ("STATE(%d):" % WorkerState.prev_iter) + base64.b64encode(zlib.compress(f.read()))
+
+    vals['nxtsock'].enqueue(indata)
+    WorkerState.prev_iter += 1
+
+###
+#  get state file from prvsock
+###
+def get_input_state(vals):
+    indata = vals['prvsock'].dequeue()
+    (msg, data) = indata.split(':', 1)
+
+    assert msg[:6] == "STATE("
+    lind = 6
+    rind = msg.find(')')
+    statenum = int(msg[lind:rind])
+
+    with open("/tmp/temp.state", 'w') as f:
+        f.write(base64.b64decode(zlib.decompress(data)))
+
+    os.rename("/tmp/temp.state", "%d.state" % statenum)
 
 ###
 #  figure out which sockets need to be selected
@@ -45,25 +76,15 @@ def get_arwsocks(vals):
     return (asocks, rsocks, wsocks)
 
 ###
-#  state passed into the make_cmdstring function
-###
-class ClientState(object):
-    prev_iter = None
-
-    # If we were (more) deranged, we'd just use
-    #     client_state = type('', (object,), {'prev_iter': None})()
-    # Yes, you can construct an anonymous class!
-
-###
 #  make command string
 ###
 def make_cmdstring(_, vals):
     command = Defs.cmdstring
 
     def vals_lookup(name, aslist = False):
-        out = vals.get('cmd%s' % name, None)
+        out = vals.get('cmd%s' % name)
         if out is None:
-            out = vals['event'].get(name, None)
+            out = vals['event'].get(name)
 
         if out is not None and aslist and not isinstance(out, list):
             out = [out]
@@ -80,6 +101,11 @@ def make_cmdstring(_, vals):
     if useargs is not None:
         command += ' ' + ' '.join(useargs)
 
+    usequality = vals_lookup('quality', False)
+    if usequality is None:
+        usequality = 0.9
+    command = command.replace("##QUALITY##", str(usequality))
+
     # ##INFILE## and ##OUTFILE## string replacement
     useinfile = vals_lookup('infile', False)
     if useinfile is not None:
@@ -87,6 +113,17 @@ def make_cmdstring(_, vals):
     useoutfile = vals_lookup('outfile', False)
     if useoutfile is not None:
         command = command.replace('##OUTFILE##', useoutfile)
+
+    if WorkerState.prev_iter != 0 and vals['expect_statefile']:
+        instatefile = "/tmp/%d.state" % WorkerState.prev_iter
+        instatewait = 'while [ ! -f "%s" ]; do sleep 1; done; ' % instatefile
+        instateswitch = "-I " + instatefile
+    else:
+        instatewait = ""
+        instateswitch = ""
+
+    command = command.replace("##INSTATEWAIT##", instatewait)
+    command = command.replace("##INSTATESWITCH##", instateswitch)
 
     return command
 
@@ -107,6 +144,7 @@ def lambda_handler(event, _):
     srvkey = event.get('srvkey')
     srvcrt = event.get('srvcrt')
     nonblock = int(event.get('nonblock', 0))
+    expect_statefile = int(event.get('nonblock', 0))
 
     # default: just run the command and exit
     if mode == 0:
@@ -124,6 +162,7 @@ def lambda_handler(event, _):
            , 'srvkey': srvkey
            , 'srvcrt': srvcrt
            , 'nonblock': nonblock
+           , 'expect_statefile': expect_statefile
            }
 
     # in mode 2, we open a listening socket and report the port number to the cmdsock
@@ -189,16 +228,16 @@ def lambda_handler(event, _):
 
                 vals['cmdsock'].enqueue(outmsg)
 
-                handle_async_return(outmsg, vals)
+                if outmsg[:12] == "OK:RETVAL(0)" and vals.get('nxtsock') is not None:
+                    send_output_state(vals)
 
-        if vals.get('prvsock') is not None:
-            pass
-            # do something
-            # handle receiving new state files from previous lambda
+        if vals.get('prvsock') is not None and vals['prvsock'].want_handle:
+            # handle receiving new state file from previous lambda
+            get_input_state(vals)
 
-        if vals.get('nxtsock') is not None:
-            pass
-            # this should be a send-only socket unless we decide we need two-way state comms
+        #if vals.get('nxtsock') is not None:
+        #    pass
+        #    # this should be a send-only socket unless we decide we need two-way state comms
 
     (afds, _, _) = get_arwsocks(vals)
     for a in afds:
@@ -219,3 +258,4 @@ def lambda_handler(event, _):
             pass
 
 cmdstring = ''
+# cmdstring = "##INSTATEWAIT## ./xc-enc -s ##QUALITY## -i y4m ##INSTATESWITCH## -O /tmp/final.state -o ##OUTFILE## ##INFILE##"
