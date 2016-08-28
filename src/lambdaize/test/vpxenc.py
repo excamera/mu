@@ -57,7 +57,7 @@ def run_tests():
         try:
             chainfile = os.path.abspath(os.path.join(sys.path[0], "data/server_chain.pem"))
             keyfile = os.path.abspath(os.path.join(sys.path[0], "data/server_key.pem"))
-            vpxenc_server.main(chainfile, keyfile)
+            vpxenc_server.run(1, chainfile, keyfile)
         except:
             print "Server exception:\n%s" % traceback.format_exc()
             sys.exit(1)
