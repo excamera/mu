@@ -165,7 +165,7 @@ shift
 # build lambda_function.py
 #
 head -n -1 "$LAMBDA_FILE_TEMPLATE" > "$LAMBDA_FILE"
-echo 'executable = """'"$PRE_ARGS"' ./'"$WORKFILE"' '"$1"'"""' >> "$LAMBDA_FILE"
+echo 'cmdstring = """'"$PRE_ARGS"' ./'"$WORKFILE"' '"$1"'"""' >> "$LAMBDA_FILE"
 shift
 
 #

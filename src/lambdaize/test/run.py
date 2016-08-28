@@ -47,16 +47,16 @@ def test_server(sock, run_nonblock, args, _):
     sock.close()
 
 def run_tests():
-    executable = "echo ##INFILE## | md5sum"
+    cmdstring = "echo ##INFILE## | md5sum"
     libmu.Defs.debug = True
-    tutil.run_one_test(test_server, executable, False, False, False)
-    tutil.run_one_test(test_server, executable, False, True, False)
-    tutil.run_one_test(test_server, executable, True, False, False)
-    tutil.run_one_test(test_server, executable, True, True, False)
-    tutil.run_one_test(test_server, executable, False, False, True)
-    tutil.run_one_test(test_server, executable, False, True, True)
-    tutil.run_one_test(test_server, executable, True, False, True)
-    tutil.run_one_test(test_server, executable, True, True, True)
+    tutil.run_one_test(test_server, cmdstring, False, False, False)
+    tutil.run_one_test(test_server, cmdstring, False, True, False)
+    tutil.run_one_test(test_server, cmdstring, True, False, False)
+    tutil.run_one_test(test_server, cmdstring, True, True, False)
+    tutil.run_one_test(test_server, cmdstring, False, False, True)
+    tutil.run_one_test(test_server, cmdstring, False, True, True)
+    tutil.run_one_test(test_server, cmdstring, True, False, True)
+    tutil.run_one_test(test_server, cmdstring, True, True, True)
 
 if __name__ == "__main__":
     run_tests()

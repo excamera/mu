@@ -20,35 +20,82 @@ def accept_new_connection(vals):
 ###
 #  send state file to nxtsock
 ###
-def send_state_file(fname, vals):
-    if vals.get('nxtsock') is None:
-        return
-
-    if fname is not None:
-        # XXX do something here!!!
-        pass
+def handle_async_return(*_):
+    # XXX do something here
+    pass
 
 ###
 #  figure out which sockets need to be selected
 ###
 def get_arwsocks(vals):
-    socknames = ['cmdsock', 'lsnsock', 'prvsock', 'nxtsock', 'runsock']
-    # asocks is all of the above that are not none
-    asocks = [ s for s in [ vals.get(n) for n in socknames ] if s is not None ]
+    # asocks is all extant sockets
+    socknames = ['cmdsock', 'lsnsock', 'prvsock', 'nxtsock']
+    asocks = [ s for s in [ vals.get(n) for n in socknames ] if s is not None ] + \
+             [ info[1] for info in vals.setdefault('runinfo', []) ]
+
     # rsocks is all objects that we could select upon
     rsocks = [ s for s in asocks
                  if isinstance(s, socket.SocketType)
                  or isinstance(s, SSL.Connection)
                  or (isinstance(s, SocketNB) and s.sock is not None) ]
+
     # wsocks is all rsocks that indicate they want to be written
     wsocks = [ s for s in asocks if isinstance(s, SocketNB) and (s.ssl_write or s.want_write) ]
+
     return (asocks, rsocks, wsocks)
+
+###
+#  state passed into the make_cmdstring function
+###
+class ClientState(object):
+    prev_iter = None
+
+    # If we were (more) deranged, we'd just use
+    #     client_state = type('', (object,), {'prev_iter': None})()
+    # Yes, you can construct an anonymous class!
+
+###
+#  make command string
+###
+def make_cmdstring(_, vals):
+    command = Defs.cmdstring
+
+    def vals_lookup(name, aslist = False):
+        out = vals.get('cmd%s' % name, None)
+        if out is None:
+            out = vals['event'].get(name, None)
+
+        if out is not None and aslist and not isinstance(out, list):
+            out = [out]
+
+        return out
+
+    # add environment variables
+    usevars = vals_lookup('vars', True)
+    if usevars is not None:
+        command = ' '.join(usevars) + ' ' + command
+
+    # add arguments
+    useargs = vals_lookup('args', True)
+    if useargs is not None:
+        command += ' ' + ' '.join(useargs)
+
+    # ##INFILE## and ##OUTFILE## string replacement
+    useinfile = vals_lookup('infile', False)
+    if useinfile is not None:
+        command = command.replace('##INFILE##', useinfile)
+    useoutfile = vals_lookup('outfile', False)
+    if useoutfile is not None:
+        command = command.replace('##OUTFILE##', useoutfile)
+
+    return command
 
 ###
 #  lambda enters here
 ###
 def lambda_handler(event, _):
-    Defs.executable = executable
+    Defs.cmdstring = cmdstring
+    Defs.make_cmdstring = staticmethod(make_cmdstring)
 
     # get config info from event
     port = int(event.get('port', 13579))
@@ -124,18 +171,25 @@ def lambda_handler(event, _):
         if break_outer:
             break
 
-        ### runsock
-        # if we got something from the runsock, handle it (and kill the sock)
-        if vals.get('runsock') is not None and vals['runsock'].want_handle:
-            (_, status) = os.waitpid(vals['runpid'], 0)
-            retval = status >> 8
+        ### runsocks
+        # if we get something from the runsock, handle it (and kill the sock)
+        # iterate in reverse because we want to be able to remove without screwing up iteration
+        for i in reversed(range(0, len(vals.setdefault('runinfo', [])))):
+            (pid, sock) = vals['runinfo'][i]
+            if sock.want_handle:
+                del vals['runinfo'][i]
 
-            (cmdstring, runval) = vals['runsock'].dequeue().split('\0')
-            vals['runsock'].close()
-            vals['runsock'] = None
-            vals['cmdsock'].enqueue('OK:RETVAL(%d):OUTPUT(%s):COMMAND(%s)' % (retval, runval, cmdstring))
-            # XXX do something with the result
-            #send_state_file(fname, vals)
+                # we only receive something after the runner is done
+                # the return value is already packed into the outmsg, so no need to get it here
+                os.waitpid(pid, 0)
+
+                outmsg = sock.dequeue()
+                sock.close()
+                del sock
+
+                vals['cmdsock'].enqueue(outmsg)
+
+                handle_async_return(outmsg, vals)
 
         if vals.get('prvsock') is not None:
             pass
@@ -164,4 +218,4 @@ def lambda_handler(event, _):
         except:
             pass
 
-executable = ''
+cmdstring = ''

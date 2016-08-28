@@ -117,16 +117,16 @@ def test_server(sock, *_):
             state = state.do_write()
 
         # in case we got multiple responses in one go
-        # XXX *never* loop here! Because of the reordering machinery for
+        # NOTE *never* loop here! Because of the reordering machinery for
         # superposition states, you can end up in an infinite loop!!!
         if state.want_handle:
             state = state.do_handle()
             print repr(state)
 
 def run_tests():
-    executable = """ ##INFILE## """
+    cmdstring = """ ##INFILE## """
     Defs.debug = True
-    tutil.run_one_test(test_server, executable, True, True)
+    tutil.run_one_test(test_server, cmdstring, True, True)
 
 if __name__ == "__main__":
     run_tests()

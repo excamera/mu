@@ -18,7 +18,7 @@ import lambda_function_template
 
 
 def run_tests():
-    lambda_function_template.executable = "vpxenc --quiet --good -o ##OUTFILE## ##INFILE##"
+    lambda_function_template.cmdstring = "vpxenc --quiet --good -o ##OUTFILE## ##INFILE##"
     Defs.debug = True
     pid = os.fork()
     if pid == 0:
@@ -30,11 +30,20 @@ def run_tests():
                 , 'srvkey': Td.srvkey
                 }
 
-        time.sleep(1)   # XXX race condition w/ server startup
+        # NOTE there is a race condition w/ server startup... 1 sec is probably OK
+        time.sleep(1)
         print "Client starting."
 
         try:
             lambda_function_template.lambda_handler(event, None)
+
+        except SystemExit as e:
+            if e.code == 0:
+                sys.exit(0)
+            else:
+                print "Client subprocess exited with code %d" % e.code
+                sys.exit(e.code)
+
         except:
             print "Client exception:\n%s" % traceback.format_exc()
             sys.exit(1)

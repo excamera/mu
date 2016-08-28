@@ -68,48 +68,97 @@ def do_dump_vals(_, vals):
     return False
 
 ###
+#  run something in the background
+###
+def _background(runner, vals, queuemsg):
+    sock = None
+    if vals['nonblock']:
+        (r, w) = os.pipe()
+        pid = os.fork()
+
+        if pid != 0:
+            os.close(w)
+            sock = FDWrapper(r)
+            sock.set_blocking(False)
+
+            info = vals.setdefault('runinfo', [])
+            info.append((pid, SocketNB(sock)))
+
+            vals['cmdsock'].enqueue(queuemsg)
+            return False
+
+        else:
+            os.close(r)
+            sock = FDWrapper(w)
+
+    (donemsg, retval) = runner()
+
+    if sock is None:
+        if vals.get('cmdsock') is not None:
+            vals['cmdsock'].enqueue(donemsg)
+            return False
+
+        else:
+            # for mode 0 where we don't connect to a command server
+
+            print donemsg
+            return donemsg
+
+    else:
+        msg = SocketNB.format_message(donemsg)
+        sock.send(msg)
+        sock.close()
+        sys.exit(retval)
+
+###
 #  tell the client to retrieve a segment from S3
 ###
 def do_retrieve(_, vals):
     if 'inkey' not in vals or 'targfile' not in vals or 'bucket' not in vals:
         vals['cmdsock'].enqueue('FAIL(bucket, inkey, or targfile not set)')
+        return False
 
-    else:
-        infile = vals['inkey']
-        outfile = vals['targfile']
-        bucket = vals['bucket']
+    infile = vals['inkey']
+    outfile = vals['targfile']
+    bucket = vals['bucket']
 
+    def ret_helper():
+        donemsg = 'OK:RETRIEVE(%s/%s)' % (bucket, infile)
+        retval = 0
         try:
             s3_client.download_file(bucket, infile, outfile)
         except:
-            vals['cmdsock'].enqueue('FAIL(retrieving from s3:\n%s)' % traceback.format_exc())
-        else:
-            vals['cmdsock'].enqueue('OK:RETRIEVE(%s/%s)' % (bucket, infile))
+            donemsg = 'FAIL(retrieving from s3:\n%s)' % traceback.format_exc()
+            retval = 1
 
-    return False
+        return (donemsg, retval)
 
+    return _background(ret_helper, vals, 'OK:RETRIEVING(%s/%s)' % (bucket, infile))
 
 ###
 #  tell the client to upload a segment to s3
 ###
 def do_upload(_, vals):
     if 'outkey' not in vals or 'fromfile' not in vals or 'bucket' not in vals:
-        vals['cmdsock'].enqueue('FAIL(outkey or fromfile not set)')
+        vals['cmdsock'].enqueue('FAIL(bucket, outkey, or fromfile not set)')
+        return False
 
-    else:
-        outfile = vals['outkey']
-        infile = vals['fromfile']
-        bucket = vals['bucket']
+    outfile = vals['outkey']
+    infile = vals['fromfile']
+    bucket = vals['bucket']
 
+    def ret_helper():
+        donemsg = 'OK:UPLOAD(%s/%s)' % (bucket, outfile)
+        retval = 0
         try:
             s3_client.upload_file(infile, bucket, outfile)
         except:
-            vals['cmdsock'].enqueue('FAIL(uploading to s3:\n%s)' % traceback.format_exc())
-        else:
-            vals['cmdsock'].enqueue('OK:UPLOAD(%s/%s)' % (bucket, outfile))
+            donemsg = 'FAIL(uploading to s3:\n%s)' % traceback.format_exc()
+            retval = 1
 
-    return False
+        return (donemsg, retval)
 
+    return _background(ret_helper, vals, 'OK:UPLOADING(%s/%s)' % (bucket, outfile))
 
 ###
 #  echo msg back to the server
@@ -117,7 +166,6 @@ def do_upload(_, vals):
 def do_echo(msg, vals):
     vals['cmdsock'].enqueue('OK:ECHO(%s)' % msg)
     return False
-
 
 ###
 #  we've been told to quit
@@ -133,82 +181,60 @@ def do_run(msg, vals):
     if msg is not None and len(msg) > 0:
         cmdstring = msg
     else:
-        cmdstring = Defs.executable
+        cmdstring = Defs.make_cmdstring(msg, vals)
 
-    def vals_lookup(name, aslist = False):
-        out = vals.get('cmd%s' % name, None)
-        if out is None:
-            out = vals['event'].get(name, None)
+    def ret_helper():
+        retval = 0
+        try:
+            output = subprocess.check_output([cmdstring], shell=True, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError as e:
+            retval = e.returncode
+            output = e.output
 
-        if out is not None and aslist and not isinstance(out, list):
-            out = [out]
+        donemsg = 'OK:RETVAL(%d):OUTPUT(%s):COMMAND(%s)' % (retval, output, cmdstring)
 
-        return out
+        return (donemsg, retval)
 
-    # add environment variables
-    usevars = vals_lookup('vars', True)
-    if usevars is not None:
-        cmdstring = ' '.join(usevars) + ' ' + cmdstring
+    return _background(ret_helper, vals, 'OK:RUNNING(%s)' % cmdstring)
 
-    # add arguments
-    useargs = vals_lookup('args', True)
-    if useargs is not None:
-        cmdstring += ' ' + ' '.join(useargs)
-
-    # ##INFILE## and ##OUTFILE## string replacement
-    useinfile = vals_lookup('infile', False)
-    if useinfile is not None:
-        cmdstring = cmdstring.replace('##INFILE##', useinfile)
-    useoutfile = vals_lookup('outfile', False)
-    if useoutfile is not None:
-        cmdstring = cmdstring.replace('##OUTFILE##', useoutfile)
-
-    # run command
-    sock = None
-    if vals['nonblock']:
-        # non-blocking mode
-        (r, w) = os.pipe()
-        pid = os.fork()
-        if pid != 0:
-            # in the parent process
-            os.close(w)
-            sock = FDWrapper(r)
-            sock.set_blocking(False)
-            vals['runpid'] = pid
-            vals['runsock'] = SocketNB(sock)
-            vals['cmdsock'].enqueue("OK:RUNNING(%s)" % cmdstring)
-            return False
-
-        else:
-            # in the child process
-            os.close(r)
-            sock = FDWrapper(w)
-
-    # run the command---either we're in blocking mode or in the fork child
-    retval = 0
-    try:
-        output = subprocess.check_output([cmdstring], shell=True, stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError as e:
-        retval = e.returncode
-        output = e.output
-
-    if sock is None:
-        # finished running the command in blocking mode
-        cmdsock = vals.get('cmdsock')
-        if cmdsock is not None:
-            # we only have a socket in command mode
-            cmdsock.enqueue('OK:RETVAL(%d):OUTPUT(%s):COMMAND(%s)' % (retval, output, cmdstring))
-            return False
-        else:
-            print output
-            return output
-
-    else:
-        # finished running the command in non-blocking mode
-        msg = SocketNB.format_message("%s\0%s" % (cmdstring, output))
-        sock.send(msg)
-        sock.close()
-        sys.exit(retval)
+#     # run command
+#     sock = None
+#     if vals['nonblock']:
+#         # non-blocking mode
+#         (r, w) = os.pipe()
+#         pid = os.fork()
+#         if pid != 0:
+#             # in the parent process
+#             os.close(w)
+#             sock = FDWrapper(r)
+#             sock.set_blocking(False)
+#             vals['runpid'] = pid
+#             vals['runsock'] = SocketNB(sock)
+#             vals['cmdsock'].enqueue("OK:RUNNING(%s)" % cmdstring)
+#             return False
+#
+#         else:
+#             # in the child process
+#             os.close(r)
+#             sock = FDWrapper(w)
+#
+#     if sock is None:
+#         # finished running the command in blocking mode
+#         cmdsock = vals.get('cmdsock')
+#         if cmdsock is not None:
+#             # we only have a socket in command mode
+#             cmdsock.enqueue('OK:RETVAL(%d):OUTPUT(%s):COMMAND(%s)' % (retval, output, cmdstring))
+#             return False
+#         else:
+#             print output
+#             return output
+#
+#     else:
+#         # finished running the command in non-blocking mode
+#         msg = SocketNB.format_message("%s\0%s" % (cmdstring, output))
+#         sock.send(msg)
+#         sock.close()
+#         sys.exit(retval)
 
 ###
 #  listen for peer lambda
@@ -326,7 +352,7 @@ message_responses = { 'set:': 'OK:SET'
                     , 'get:': 'OK:GET'
                     , 'geti:': 'OK:GETI'
                     , 'dump_vals:': 'OK:DUMP_VALS'
-                    , 'retrieve:': 'OK:RETRIEVE'
+                    , 'retrieve:': 'OK:RETRIEV'
                     , 'upload:': 'OK:UPLOAD'
                     , 'echo:': 'OK:ECHO'
                     , 'run:': 'OK:R'

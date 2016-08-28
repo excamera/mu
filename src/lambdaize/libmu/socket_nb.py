@@ -95,7 +95,7 @@ class SocketNB(object):
         while True:
             if self.expectlen is None:
                 if len(self.recv_buf) >= Defs.header_len:
-                    # XXX handle exception here?
+                    # NOTE exception will bubble out to calling function!
                     self.expectlen = int(self.recv_buf[0:Defs.header_len])
                     self.recv_buf = self.recv_buf[Defs.header_len:]
                 else:

@@ -21,14 +21,19 @@ class VPXEncStateMachine(CommandListState):
                   , "set:fromfile:/tmp/{0}{1}.ivf"
                   , "set:outkey:{0}/out/{0}{1}.ivf"
                   , "retrieve:"
-                  , "run:"
-                  , ("OK:RETVAL(0)", "upload:")
-                  , "quit:"
+                  , ("OK:RETRIEVE(", "run:")
+                  , ("OK:RETVAL(0)", "seti:nonblock:1")
+                  , ("OK:SETI", "upload:")
+                  , ("OK:UPLOADING", None)
+                  , ("OK:UPLOAD(", "quit:")
                   ]
 
     def __init__(self, prevState, aNum, vName):
         super(VPXEncStateMachine, self).__init__(prevState, aNum)
-        self.commands = [ s.format(vName, "%06d" % aNum) for s in self.commands ]
+        self.commands = [ s.format(vName, "%06d" % aNum) if s is not None else None for s in self.commands ]
+
+        print self.commands
+        print self.expects
 
 #### begin script ####
 

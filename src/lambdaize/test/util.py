@@ -38,7 +38,7 @@ def blocking_accept(sock):
         raise Exception("timeout waiting to accept")
     return libmu.util.accept_socket(sock)
 
-def run_one_test(test_server, executable, use_ssl, run_nonblock, *args, **kwargs):
+def run_one_test(test_server, cmdstring, use_ssl, run_nonblock, *args, **kwargs):
     if use_ssl:
         ls = util.listen_socket('127.0.0.1', 0, Td.cacert, Td.srvcrt, Td.srvkey, 1)
         if not isinstance(ls, SSL.Connection):
@@ -50,7 +50,7 @@ def run_one_test(test_server, executable, use_ssl, run_nonblock, *args, **kwargs
     if pid == 0:
         (_, port) = ls.getsockname()
         print port
-        lambda_function_template.executable = executable
+        lambda_function_template.cmdstring = cmdstring
         event = { 'mode': kwargs.get('mode', 1)
                 , 'port': port
                 , 'nonblock': 1 if run_nonblock else 0
