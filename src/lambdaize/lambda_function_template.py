@@ -114,7 +114,7 @@ def make_cmdstring(_, vals):
         command = command.replace('##OUTFILE##', useoutfile)
 
     if WorkerState.prev_iter != 0 and vals['expect_statefile']:
-        instatefile = "/tmp/%d.state" % WorkerState.prev_iter
+        instatefile = "/tmp/%d.state" % (WorkerState.prev_iter - 1)
         instatewait = 'while [ ! -f "%s" ]; do sleep 1; done; ' % instatefile
         instateswitch = "-I " + instatefile
     else:
