@@ -32,9 +32,6 @@ class VPXEncStateMachine(CommandListState):
         super(VPXEncStateMachine, self).__init__(prevState, aNum)
         self.commands = [ s.format(vName, "%06d" % aNum) if s is not None else None for s in self.commands ]
 
-        print self.commands
-        print self.expects
-
 #### begin script ####
 
 def main(chainfile=None, keyfile=None):
