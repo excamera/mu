@@ -12,7 +12,7 @@ import libmu.machine_state
 ###
 #  server mainloop
 ###
-def server_main_loop(states, handle_server_sock, num_parts, chainfile=None, keyfile=None):
+def server_main_loop(states, handle_server_sock, num_parts, basename, chainfile=None, keyfile=None):
     # bro, you listening to this?
     lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     lsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -70,7 +70,7 @@ def server_main_loop(states, handle_server_sock, num_parts, chainfile=None, keyf
 
         for r in rfds:
             if r is lsock:
-                lsock = handle_server_sock(lsock, states, num_parts)
+                lsock = handle_server_sock(lsock, states, num_parts, basename)
 
             else:
                 rnext = r.do_read()

@@ -132,12 +132,12 @@ class XCEncSetNeighborConnectState(OnePassState):
 
         return self.nextState(self)
 
-def handle_server_sock(ls, states, num_parts):
+def handle_server_sock(ls, states, num_parts, basename):
     (ns, _) = ls.accept()
     ns.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     ns.setblocking(False)
 
-    nstate = XCEncSetNeighborConnectState(ns, len(states), "bbb", len(states) is not num_parts - 1)
+    nstate = XCEncSetNeighborConnectState(ns, len(states), basename, len(states) is not num_parts - 1)
     nstate.do_handshake()
 
     states.append(nstate)
@@ -154,12 +154,16 @@ def handle_server_sock(ls, states, num_parts):
 
     return ls
 
-def run(num_parts, chainfile=None, keyfile=None):
-    server.server_main_loop(ServerInfo.states, handle_server_sock, num_parts, chainfile, keyfile)
+def run(num_parts, basename, chainfile=None, keyfile=None):
+    server.server_main_loop(ServerInfo.states, handle_server_sock, num_parts, basename, chainfile, keyfile)
 
 if __name__ == "__main__":
     nparts = 1
     if len(sys.argv) > 1:
         nparts = int(sys.argv[1])
 
-    run(nparts)
+    bname = "6bbb"
+    if len(sys.argv) > 2:
+        bname = sys.argv[2]
+
+    run(nparts, bname)

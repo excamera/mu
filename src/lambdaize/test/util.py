@@ -139,7 +139,7 @@ def run_encsrv_test((cmdstring, mode, server_run)):
         try:
             chainfile = os.path.abspath(os.path.join(sys.path[0], "data/server_chain.pem"))
             keyfile = os.path.abspath(os.path.join(sys.path[0], "data/server_key.pem"))
-            server_run(1, chainfile, keyfile)
+            server_run(1, "6bbb", chainfile, keyfile)
         except:
             print "Server exception:\n%s" % traceback.format_exc()
             sys.exit(1)
