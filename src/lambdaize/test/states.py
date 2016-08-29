@@ -32,8 +32,8 @@ class FinalState(TerminalState):
 
 class FinishState(CommandListState):
     nextState = FinalState
-    commandlist = [ ("OK:RETRIEVE", "run:diff /tmp/test.txt /tmp/test2.txt")
-                  , ("OK:RETVAL(0)", "run:rm /tmp/test.txt /tmp/test2.txt")
+    commandlist = [ ("OK:RETRIEVE", "run:diff ##TMPDIR##/test.txt ##TMPDIR##/test2.txt")
+                  , ("OK:RETVAL(0)", "run:rm ##TMPDIR##/test.txt ##TMPDIR##/test2.txt")
                   , "quit:"
                   ]
 
@@ -83,9 +83,9 @@ class TestSuperpositionState(SuperpositionState):
 class StartState(CommandListState):
     nextState = TestSuperpositionState
     commandlist = [ ("OK:HELLO", "set:inkey:testkey")
-                  , "set:targfile:/tmp/test2.txt"
-                  , "set:cmdinfile:curl http://www.google.com | md5sum > /tmp/test.txt"
-                  , "set:fromfile:/tmp/test.txt"
+                  , "set:targfile:##TMPDIR##/test2.txt"
+                  , "set:cmdinfile:curl http://www.google.com | md5sum > ##TMPDIR##/test.txt"
+                  , "set:fromfile:##TMPDIR##/test.txt"
                   , "set:outkey:testkey"
                   , "seti:nonblock:1"
                   , "run:"

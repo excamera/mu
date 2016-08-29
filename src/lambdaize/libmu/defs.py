@@ -11,3 +11,21 @@ class Defs(object):
     @staticmethod
     def make_cmdstring(*_):
         return Defs.cmdstring
+
+    @staticmethod
+    def make_retrievestring(_, vals):
+        bucket = vals.get('bucket')
+        key = vals.get('inkey')
+        filename = vals.get('targfile')
+        success = bucket is not None and key is not None and filename is not None
+
+        return (success, bucket, key, filename)
+
+    @staticmethod
+    def make_uploadstring(_, vals):
+        bucket = vals.get('bucket')
+        key = vals.get('outkey')
+        filename = vals.get('fromfile')
+        success = bucket is not None and key is not None and filename is not None
+
+        return (success, bucket, key, filename)

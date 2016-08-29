@@ -11,11 +11,12 @@ class FinalState(TerminalState):
 class VPXEncStateMachine(CommandListState):
     nextState = FinalState
     commandlist = [ ("OK:HELLO", "set:inkey:{0}/{0}{1}.y4m")
-                  , "set:targfile:/tmp/{0}{1}.y4m"
-                  , "set:cmdinfile:/tmp/{0}{1}.y4m"
-                  , "set:cmdoutfile:/tmp/{0}{1}.ivf"
-                  , "set:fromfile:/tmp/{0}{1}.ivf"
+                  , "set:targfile:##TMPDIR##/{0}{1}.y4m"
+                  , "set:cmdinfile:##TMPDIR##/{0}{1}.y4m"
+                  , "set:cmdoutfile:##TMPDIR##/{0}{1}.ivf"
+                  , "set:fromfile:##TMPDIR##/{0}{1}.ivf"
                   , "set:outkey:{0}/out/{0}{1}.ivf"
+                  , "seti:rm_tmpdir:1"
                   , "retrieve:"
                   , ("OK:RETRIEVE(", "run:")
                   , ("OK:RETVAL(0)", "seti:nonblock:1")

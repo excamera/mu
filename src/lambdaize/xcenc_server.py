@@ -82,13 +82,14 @@ class XCEncSettingsState(CommandListState):
     extra = "(preparing worker)"
     nextState = XCSetupConnect
     commandlist = [ "set:inkey:{0}/{0}{1}.y4m"
-                  , "set:targfile:/tmp/{0}{1}.y4m"
-                  , "set:cmdinfile:/tmp/{0}{1}.y4m"
-                  , "set:cmdoutfile:/tmp/{0}{1}.ivf"
+                  , "set:targfile:##TMPDIR##/{0}{1}.y4m"
+                  , "set:cmdinfile:##TMPDIR##/{0}{1}.y4m"
+                  , "set:cmdoutfile:##TMPDIR##/{0}{1}.ivf"
+                  , "set:fromfile:##TMPDIR##/{0}{1}.ivf"
                   , "set:cmdquality:0.9"
-                  , "set:fromfile:/tmp/{0}{1}.ivf"
                   , "set:outkey:{0}/out/{0}{1}.ivf"
                   , "seti:nonblock:1"
+                  , "seti:rm_tmpdir:0"
                   , "retrieve:"
                   ]
 

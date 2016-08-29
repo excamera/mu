@@ -113,52 +113,46 @@ def _background(runner, vals, queuemsg):
 ###
 #  tell the client to retrieve a segment from S3
 ###
-def do_retrieve(_, vals):
-    if 'inkey' not in vals or 'targfile' not in vals or 'bucket' not in vals:
-        vals['cmdsock'].enqueue('FAIL(bucket, inkey, or targfile not set)')
+def do_retrieve(msg, vals):
+    (success, bucket, key, filename) = Defs.make_retrievestring(msg, vals)
+    if not success:
+        vals['cmdsock'].enqueue('FAIL(could not compute download params)')
         return False
 
-    infile = vals['inkey']
-    outfile = vals['targfile']
-    bucket = vals['bucket']
-
     def ret_helper():
-        donemsg = 'OK:RETRIEVE(%s/%s)' % (bucket, infile)
+        donemsg = 'OK:RETRIEVE(%s/%s)' % (bucket, key)
         retval = 0
         try:
-            s3_client.download_file(bucket, infile, outfile)
+            s3_client.download_file(bucket, key, filename)
         except:
             donemsg = 'FAIL(retrieving from s3:\n%s)' % traceback.format_exc()
             retval = 1
 
         return (donemsg, retval)
 
-    return _background(ret_helper, vals, 'OK:RETRIEVING(%s/%s)' % (bucket, infile))
+    return _background(ret_helper, vals, 'OK:RETRIEVING(%s/%s)' % (bucket, key))
 
 ###
 #  tell the client to upload a segment to s3
 ###
-def do_upload(_, vals):
-    if 'outkey' not in vals or 'fromfile' not in vals or 'bucket' not in vals:
-        vals['cmdsock'].enqueue('FAIL(bucket, outkey, or fromfile not set)')
+def do_upload(msg, vals):
+    (success, bucket, key, filename) = Defs.make_uploadstring(msg, vals)
+    if not success:
+        vals['cmdsock'].enqueue('FAIL(could not compute upload params)')
         return False
 
-    outfile = vals['outkey']
-    infile = vals['fromfile']
-    bucket = vals['bucket']
-
     def ret_helper():
-        donemsg = 'OK:UPLOAD(%s/%s)' % (bucket, outfile)
+        donemsg = 'OK:UPLOAD(%s/%s)' % (bucket, key)
         retval = 0
         try:
-            s3_client.upload_file(infile, bucket, outfile)
+            s3_client.upload_file(filename, bucket, key)
         except:
             donemsg = 'FAIL(uploading to s3:\n%s)' % traceback.format_exc()
             retval = 1
 
         return (donemsg, retval)
 
-    return _background(ret_helper, vals, 'OK:UPLOADING(%s/%s)' % (bucket, outfile))
+    return _background(ret_helper, vals, 'OK:UPLOADING(%s/%s)' % (bucket, key))
 
 ###
 #  echo msg back to the server
@@ -178,10 +172,7 @@ def do_quit(_, vals):
 #  run the command
 ###
 def do_run(msg, vals):
-    if msg is not None and len(msg) > 0:
-        cmdstring = msg
-    else:
-        cmdstring = Defs.make_cmdstring(msg, vals)
+    cmdstring = Defs.make_cmdstring(msg, vals)
 
     def ret_helper():
         retval = 0

@@ -3,7 +3,9 @@
 import base64
 import os
 import select
+import shutil
 import socket
+import tempfile
 import zlib
 
 from OpenSSL import SSL
@@ -20,23 +22,14 @@ def accept_new_connection(vals):
         vals['prvsock'] = util.accept_socket(vals['lsnsock'])
 
 ###
-#  state passed into the make_cmdstring function
-###
-class WorkerState(object):
-    prev_iter = 0
-    # If we were (more) deranged, we'd just use
-    #     client_state = type('', (object,), {'prev_iter': None})()
-    # Yes, you can construct an anonymous class!
-
-###
 #  send state file to nxtsock
 ###
 def send_output_state(vals):
-    with open("/tmp/final.state", 'r') as f:
-        indata = ("STATE(%d):" % WorkerState.prev_iter) + base64.b64encode(zlib.compress(f.read()))
+    with open(vals['_tmpdir'] + "/final.state", 'r') as f:
+        indata = ("STATE(%d):" % vals['prev_iter']) + base64.b64encode(zlib.compress(f.read()))
 
     vals['nxtsock'].enqueue(indata)
-    WorkerState.prev_iter += 1
+    vals['prev_iter'] += 1
 
 ###
 #  get state file from prvsock
@@ -50,10 +43,10 @@ def get_input_state(vals):
     rind = msg.find(')')
     statenum = int(msg[lind:rind])
 
-    with open("/tmp/temp.state", 'w') as f:
+    with open(vals['_tmpdir'] + "/temp.state", 'w') as f:
         f.write(base64.b64decode(zlib.decompress(data)))
 
-    os.rename("/tmp/temp.state", "%d.state" % statenum)
+    os.rename(vals['_tmpdir'] + "/temp.state", vals['_tmpdir'] + "/%d.state" % statenum)
 
 ###
 #  figure out which sockets need to be selected
@@ -78,8 +71,11 @@ def get_arwsocks(vals):
 ###
 #  make command string
 ###
-def make_cmdstring(_, vals):
-    command = Defs.cmdstring
+def make_cmdstring(msg, vals):
+    if msg is not None and len(msg) > 0:
+        command = msg
+    else:
+        command = Defs.cmdstring
 
     def vals_lookup(name, aslist = False):
         out = vals.get('cmd%s' % name)
@@ -91,40 +87,64 @@ def make_cmdstring(_, vals):
 
         return out
 
-    # add environment variables
+    # environment variables
     usevars = vals_lookup('vars', True)
     if usevars is not None:
         command = ' '.join(usevars) + ' ' + command
 
-    # add arguments
+    # arguments
     useargs = vals_lookup('args', True)
     if useargs is not None:
         command += ' ' + ' '.join(useargs)
 
+    # quality setting
     usequality = vals_lookup('quality', False)
     if usequality is not None:
         command = command.replace("##QUALITY##", usequality)
 
-    # ##INFILE## and ##OUTFILE## string replacement
+    # infile
     useinfile = vals_lookup('infile', False)
     if useinfile is not None:
         command = command.replace('##INFILE##', useinfile)
+
+    # outfile
     useoutfile = vals_lookup('outfile', False)
     if useoutfile is not None:
         command = command.replace('##OUTFILE##', useoutfile)
 
-    if WorkerState.prev_iter != 0 and vals['expect_statefile']:
-        instatefile = "/tmp/%d.state" % (WorkerState.prev_iter - 1)
+    # statefile
+    if vals['prev_iter'] != 0 and vals['expect_statefile']:
+        instatefile = "##TMPDIR##/%d.state" % (vals['prev_iter'] - 1)
         instatewait = 'while [ ! -f "%s" ]; do sleep 1; done; ' % instatefile
-        instateswitch = "-I " + instatefile
+        instateswitch = '-I "' + instatefile + '"'
     else:
         instatewait = ""
         instateswitch = ""
-
     command = command.replace("##INSTATEWAIT##", instatewait)
     command = command.replace("##INSTATESWITCH##", instateswitch)
 
+    # local tempdir
+    # NOTE this replacement must come after infile and outfile because they may refer to ##TMPDIR##
+    command = command.replace("##TMPDIR##", vals['_tmpdir'])
+
     return command
+
+###
+#  process strings for s3 commands before uploading
+###
+def make_urstring(_, vals, keyk, filek):
+    bucket = vals.get('bucket')
+    key = vals.get(keyk)
+    filename = vals.get(filek)
+    success = bucket is not None and key is not None and filename is not None
+
+    if success:
+        filename = filename.replace("##TMPDIR##", vals['_tmpdir'])
+
+    return (success, bucket, key, filename)
+
+make_uploadstring = lambda m, v: make_urstring(m, v, 'outkey', 'fromfile')
+make_retrievestring = lambda m, v: make_urstring(m, v, 'inkey', 'targfile')
 
 ###
 #  lambda enters here
@@ -132,6 +152,8 @@ def make_cmdstring(_, vals):
 def lambda_handler(event, _):
     Defs.cmdstring = cmdstring
     Defs.make_cmdstring = staticmethod(make_cmdstring)
+    Defs.make_retrievestring = staticmethod(make_retrievestring)
+    Defs.make_uploadstring = staticmethod(make_uploadstring)
 
     # get config info from event
     port = int(event.get('port', 13579))
@@ -143,7 +165,21 @@ def lambda_handler(event, _):
     srvkey = event.get('srvkey')
     srvcrt = event.get('srvcrt')
     nonblock = int(event.get('nonblock', 0))
-    expect_statefile = int(event.get('nonblock', 0))
+    expect_statefile = int(event.get('expect_statefile', 0))
+    rm_tmpdir = int(event.get('rm_tmpdir', 1))
+
+    vals = { 'bucket': bucket
+           , 'region': region
+           , 'event': event
+           , 'cacert': cacert
+           , 'srvkey': srvkey
+           , 'srvcrt': srvcrt
+           , 'nonblock': nonblock
+           , 'expect_statefile': expect_statefile
+           , 'rm_tmpdir': rm_tmpdir
+           , 'prev_iter': 0
+           , '_tmpdir': tempfile.mkdtemp(prefix="lambda_", dir="/tmp")
+           }
 
     # default: just run the command and exit
     if mode == 0:
@@ -152,17 +188,7 @@ def lambda_handler(event, _):
     s = util.connect_socket(addr, port, cacert)
     if not isinstance(s, SocketNB):
         return str(s)
-
-    vals = { 'cmdsock': s
-           , 'bucket': bucket
-           , 'region': region
-           , 'event': event
-           , 'cacert': cacert
-           , 'srvkey': srvkey
-           , 'srvcrt': srvcrt
-           , 'nonblock': nonblock
-           , 'expect_statefile': expect_statefile
-           }
+    vals['cmdsock'] = s
 
     # in mode 2, we open a listening socket and report the port number to the cmdsock
     if mode == 2:
@@ -211,7 +237,7 @@ def lambda_handler(event, _):
 
         ### runsocks
         # if we get something from the runsock, handle it (and kill the sock)
-        # iterate in reverse because we want to be able to remove without screwing up iteration
+        # (iterate in reverse because we want to be able to remove entries)
         for i in reversed(range(0, len(vals.setdefault('runinfo', [])))):
             (pid, sock) = vals['runinfo'][i]
             if sock.want_handle:
@@ -234,10 +260,6 @@ def lambda_handler(event, _):
             # handle receiving new state file from previous lambda
             get_input_state(vals)
 
-        #if vals.get('nxtsock') is not None:
-        #    pass
-        #    # this should be a send-only socket unless we decide we need two-way state comms
-
     (afds, _, _) = get_arwsocks(vals)
     for a in afds:
         # try to be nice... but not too hard
@@ -256,5 +278,7 @@ def lambda_handler(event, _):
         except:
             pass
 
+    if vals.get('rm_tmpdir') and vals.get('_tmpdir') is not None:
+        shutil.rmtree(vals.get('_tmpdir'))
+
 cmdstring = ''
-# cmdstring = "##INSTATEWAIT## ./xc-enc -s ##QUALITY## -i y4m ##INSTATESWITCH## -O /tmp/final.state -o ##OUTFILE## ##INFILE##"
