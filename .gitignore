@@ -8,14 +8,18 @@ Makefile.in
 
 /aclocal.m4
 /autom4te.cache/
+/config.guess
 /config.h
 /config.h.in
 /config.h.in~
 /config.log
+/config.sub
 /config.status
 /configure
 /depcomp
 /install-sh
+/libtool
+/ltmain.sh
 /missing
 /stamp-h1
 /compile

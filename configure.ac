@@ -6,6 +6,7 @@ AC_INIT([mu], [0.01], [keithw@cs.stanford.edu])
 AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_SRCDIR([src/frontend/hello.cc])
 AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_MACRO_DIRS([m4])
 
 # Add C++ flags
 CXX14_FLAGS="-std=c++14 -pthread"
@@ -15,7 +16,7 @@ AC_SUBST([PICKY_CXXFLAGS])
 
 # Checks for programs.
 AC_PROG_CXX
-AC_PROG_RANLIB
+LT_INIT
 
 # Checks for libraries.
 PKG_CHECK_MODULES([OpenSSL], [libssl libcrypto])
