@@ -3,7 +3,9 @@
 import os
 import select
 import sys
+import time
 import traceback
+sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], os.pardir)))
 
 from OpenSSL import SSL
 
@@ -38,6 +40,35 @@ def blocking_accept(sock):
         raise Exception("timeout waiting to accept")
     return libmu.util.accept_socket(sock)
 
+def run_lambda_function_template(event):
+    print "Client starting."
+
+    try:
+        lambda_function_template.lambda_handler(event, None)
+
+    except SystemExit as e:
+        if e.code == 0:
+            sys.exit(0)
+        else:
+            print "Client subprocess exited with code %d" % e.code
+            sys.exit(e.code)
+
+    except:
+        print "Client exception:\n%s" % traceback.format_exc()
+        sys.exit(1)
+
+    print "Client exiting."
+    sys.exit(0)
+
+def server_finish_check_retval(pid):
+    (_, status) = os.waitpid(pid, 0)
+    retval = status >> 8
+    if retval != 0:
+        print "ERROR: client process exited with retval %d" % retval
+        sys.exit(1)
+    else:
+        print "Server exiting."
+
 def run_one_test(test_server, cmdstring, use_ssl, run_nonblock, *args, **kwargs):
     if use_ssl:
         ls = util.listen_socket('127.0.0.1', 0, Td.cacert, Td.srvcrt, Td.srvkey, 1)
@@ -63,10 +94,7 @@ def run_one_test(test_server, cmdstring, use_ssl, run_nonblock, *args, **kwargs)
             if Td.srvkey is not None:
                 event['srvkey'] = Td.srvkey
 
-        print "Client starting."
-        lambda_function_template.lambda_handler(event, None)
-        print "Client exiting."
-        sys.exit(0)
+        run_lambda_function_template(event)
 
     else:
         cs = blocking_accept(ls)
@@ -87,11 +115,33 @@ def run_one_test(test_server, cmdstring, use_ssl, run_nonblock, *args, **kwargs)
 
         server_finish_check_retval(pid)
 
-def server_finish_check_retval(pid):
-    (_, status) = os.waitpid(pid, 0)
-    retval = status >> 8
-    if retval != 0:
-        print "ERROR: client process exited with retval %d" % retval
-        sys.exit(1)
+def run_encsrv_test((cmdstring, mode, server_run)):
+    lambda_function_template.cmdstring = cmdstring
+    libmu.Defs.debug = True
+    pid = os.fork()
+    if pid == 0:
+        event = { 'mode': mode
+                , 'port': 13579
+                , 'nonblock': 0
+                , 'cacert': Td.cacert
+                , 'srvcrt': Td.srvcrt
+                , 'srvkey': Td.srvkey
+                }
+
+        # NOTE there is a race condition w/ server startup... 1 sec is probably OK
+        time.sleep(1)
+
+        run_lambda_function_template(event)
+
     else:
-        print "Server exiting."
+        print "Server starting."
+
+        try:
+            chainfile = os.path.abspath(os.path.join(sys.path[0], "data/server_chain.pem"))
+            keyfile = os.path.abspath(os.path.join(sys.path[0], "data/server_key.pem"))
+            server_run(1, chainfile, keyfile)
+        except:
+            print "Server exception:\n%s" % traceback.format_exc()
+            sys.exit(1)
+
+        server_finish_check_retval(pid)

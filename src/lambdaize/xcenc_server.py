@@ -37,20 +37,24 @@ class XCEncLoopState(ForLoopState):
 # need to do this here to avoid use-before-def
 XCEncRunState.nextState = XCEncLoopState
 
-class XCEncDoConnect(CommandListState):
+class XCEncMaybeDoConnect(CommandListState):
     extra = "(connecting to neighbor)"
-    commandList = [ (None, "connect:")
+    commandlist = [ (None, None)
                   , ("OK:CONNECT", None)
                   ]
 
     def __init__(self, prevState, aNum=0):
-        super(XCEncDoConnect, self).__init__(prevState, aNum)
+        super(XCEncMaybeDoConnect, self).__init__(prevState, aNum)
         # fill in correct command
-        self.commands[0] = "connect:%s:%d" % self.info['connecthost']
+        if self.info.get('do_fwconn'):
+            self.commands[0] = "connect:%s:%d" % self.info['connecthost']
+        else:
+            del self.commands[1]
+            del self.expects[1]
 
 class XCEncWaitForConnectHost(InfoWatcherState):
     extra = "(waiting for neighbor to be ready to accept a connection)"
-    nextState = XCEncDoConnect
+    nextState = XCEncMaybeDoConnect
 
     def info_updated(self):
         if self.info.get('connecthost') is not None:
@@ -58,7 +62,7 @@ class XCEncWaitForConnectHost(InfoWatcherState):
 
 class XCEncStartConnect(IfElseState):
     extra = "(checking whether neighbor is ready to accept a connection)"
-    consequentState = XCEncDoConnect
+    consequentState = XCEncMaybeDoConnect
     alternativeState = XCEncWaitForConnectHost
 
     def testfn(self):

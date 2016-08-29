@@ -7,8 +7,8 @@ sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], os.pardir)))
 
 import test.run as run
 import test.states as states
-import test.vpxenc as vpxenc
+import test.encsrv as encsrv
 
 run.run_tests()
 states.run_tests()
-vpxenc.run_tests()
+encsrv.run_tests()

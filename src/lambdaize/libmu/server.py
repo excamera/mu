@@ -62,10 +62,10 @@ def server_main_loop(states, handle_server_sock, num_parts, chainfile=None, keyf
         if lsock is not None:
             readSocks += [lsock]
 
-        (rfds, wfds, _) = select.select(readSocks, writeSocks, [], 60)
+        (rfds, wfds, _) = select.select(readSocks, writeSocks, [], libmu.defs.Defs.timeout)
 
         if len(rfds) == 0 and len(wfds) == 0:
-            print "TIMEOUT!!!"
+            print "SERVER TIMEOUT"
             break
 
         for r in rfds:

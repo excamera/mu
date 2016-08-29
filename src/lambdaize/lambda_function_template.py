@@ -179,8 +179,8 @@ def lambda_handler(event, _):
 
         (rfds, wfds, _) = select.select(rsocks, wsocks, [], Defs.timeout)
 
-        if len(rfds) == 0 and len(wfds) == 0:
-            print "TIMEOUT!!!"
+        if len(rfds) == 0 and len(wfds) == 0 and len(vals.setdefault('runinfo', [])) == 0:
+            print "CLIENT TIMEOUT"
             break
 
         # do all the reads we can

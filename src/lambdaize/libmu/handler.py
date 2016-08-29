@@ -214,7 +214,7 @@ def do_listen(_, vals):
     except:
         vals['cmdsock'].enqueue('FAIL(could not open listening socket)')
 
-    if not isinstance(ls, SocketNB):
+    if isinstance(ls, str):
         vals['cmdsock'].enqueue('FAIL(%s)' % str(ls))
         return True
 

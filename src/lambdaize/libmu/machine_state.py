@@ -214,6 +214,10 @@ class CommandListState(MultiPassState):
         self.expects += [ cmd[0] if isinstance(cmd, tuple) else message_responses.get(pc, "OK")
                           for (cmd, pc) in zip(self.commandlist[1:], self.commands[:-1]) ]
 
+        if self.expects[0] is None:
+            self.expects[0] = libmu.util.rand_str(32)
+            self.kick()
+
 class IfElseState(OnePassState):
     extra = "(ifelse state)"
     consequentState = TerminalState
