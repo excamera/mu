@@ -1,9 +1,15 @@
 #!/usr/bin/perl -w
 use strict;
 
-if (scalar(@ARGV) != 2) {
-    die "Usage: $0 <infile> <outpattern>"
+if (scalar(@ARGV) != 3) {
+    die "Usage: $0 <infile> <outpattern> <nframes>";
 }
+
+my $nframes = int($ARGV[2]);
+if ($nframes == 0) {
+    die "nframes must be nonzero!";
+}
+
 
 open my $infile, "<" . $ARGV[0] or die "Could not open $ARGV[0]: $!";
 my $header = <$infile>;
@@ -34,10 +40,10 @@ my $outfile;
 for (my $i = 0; <$infile>; $i++) {
     # <$infile> reads up to next linebreak, which is the start of the next frame by def'n of YUV4MPEG2 format
 
-    # open a new file every 48 frames ( 2 seconds )
-    if ($i % 48 == 0) {
+    # open a new file every $nframes frames
+    if ($i % $nframes == 0) {
         close $outfile if defined($outfile);
-        open $outfile, sprintf('>%s%06d.y4m', $ARGV[1], $i / 48);
+        open $outfile, sprintf('>%s%06d.y4m', $ARGV[1], $i / $nframes);
         print $outfile $header;
         print STDERR '.';
     }
