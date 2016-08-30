@@ -1,8 +1,11 @@
-/* -*-mode:c++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*-mode:c++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 
 #include <iostream>
 #include <cstdlib>
+#include <cstring>
+#include <fstream>
 #include <sstream>
+#include <stdexcept>
 #include <time.h>
 #include <unistd.h>
 
@@ -16,10 +19,10 @@
 
 using namespace std;
 
-void launchser(int nlaunch);
+void launchpar(int nlaunch);
 SecureSocket new_connection(const Address &addr, const string &name, SSLContext &ctx);
-
-static const string cacert = {"MIICSDCCAbGgAwIBAgIJANsD8uL26wB6MA0GCSqGSIb3DQEBCwUAMD0xCzAJBgNVBAYTAlVTMQswCQYDVQQIDAJOWTEOMAwGA1UECgwFZXZzc2wxETAPBgNVBAMMCGV2c3NsX2NhMB4XDTE2MDcyODE5MjYzMVoXDTI2MDcyNjE5MjYzMVowPTELMAkGA1UEBhMCVVMxCzAJBgNVBAgMAk5ZMQ4wDAYDVQQKDAVldnNzbDERMA8GA1UEAwwIZXZzc2xfY2EwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBALJqpBlSHh7CoDrLq4ppE/nrQJdrWUI6pB8SuvJIjIFUwk9oAqVWkoyG3urjWhbC0UF4h/puglAYDbEijfhoJpCeHTVEizTNu1AbrDAGeVQll2/VgsGdI/eH4rvxDNk3DDTcKKcZWIQGPKGror5MHDfrAPVKzuNNqkEomPuii1UDAgMBAAGjUDBOMB0GA1UdDgQWBBS2WSlhZSg+A/D7uUY8fqcJSpnBSzAfBgNVHSMEGDAWgBS2WSlhZSg+A/D7uUY8fqcJSpnBSzAMBgNVHRMEBTADAQH/MA0GCSqGSIb3DQEBCwUAA4GBAGYJB31CSqLMuT5xIuWjXR4IyKAYsplDenYmi05NkCOG99UDDBYILr71/lWSnAIh14I5DVbu5mEL6cwt+WM7nfaz/sKVyvjRhabGnLDvfbz2N34MOivCt7gOv3/mpXUnLwA/qAeXUMbBfxnu5x8skIICVy5WM5vz4VDmp2j7QCkH"};
+void json_from_env(const char *varname, stringstream &strm, char pre_char, bool throw_if_empty, const char *dflt);
+void read_cert_file(const char *varname, stringstream &strm);
 
 static const vector<string> lambda_regions = { {"us-east-1"}        // Oregon
                                              /*
@@ -42,7 +45,7 @@ int main(int argc, char **argv)
     }
 
     try {
-        launchser(nlaunch);
+        launchpar(nlaunch);
     } catch ( const exception & e ) {
         print_exception( e );
         return EXIT_FAILURE;
@@ -51,21 +54,97 @@ int main(int argc, char **argv)
     return EXIT_SUCCESS;
 }
 
-void launchser(int nlaunch) {
+void json_from_env(const char *varname, stringstream &strm, char prechar, bool throw_if_empty, const char *dflt) {
+    string envvarname("EVENT_");
+    envvarname += varname;
+    char *value = getenv(envvarname.c_str());
+
+    if (!value) {
+        if (throw_if_empty) {
+            string err = "missing required environment variable: EVENT_";
+            err += varname;
+            throw runtime_error(err);
+        } else if (dflt == NULL) {
+            return;
+        }
+
+        value = (char *)dflt;
+    }
+
+    strm << prechar << '"' << varname << "\":\"" << value << '"';
+}
+
+void read_cert_file(const char *varname, stringstream &strm) {
+    string envvarname("EVENT_");
+    envvarname += varname;
+    char *filename = getenv(envvarname.c_str());
+
+    if (!filename) {
+        return;
+    }
+
+    ifstream cert(filename);
+    if (!cert.good()) {
+        return;
+    }
+
+    string tmp;
+    strm << ',' << '"' << varname << "\":\"";
+
+    bool started = false;
+    while (true) {
+        getline(cert, tmp);
+        if (tmp.find("-----BEGIN ") == 0) {
+            started = true;
+            continue;
+        } else if (tmp.find("-----END ") == 0 || tmp == "") {
+            break;
+        }
+
+        if (started) {
+            strm << tmp;
+        }
+    }
+
+    strm << '"';
+}
+
+void launchpar(int nlaunch) {
     // prepare requests
     cerr << "Building requests... ";
     string fn_name = safe_getenv("LAMBDA_FUNCTION");
     string secret = safe_getenv("AWS_SECRET_ACCESS_KEY");
     string akid = safe_getenv("AWS_ACCESS_KEY_ID");
-    string ipaddr = safe_getenv("UDP_PING_ADDR");
-    string ipport = safe_getenv("UDP_PING_PORT");
+
+    string payload;
+    {
+        stringstream pstream;
+
+        // required  parts
+        json_from_env("addr", pstream, '{', true, NULL);
+        json_from_env("port", pstream, ',', true, NULL);
+
+        // optional parts
+        read_cert_file("cacert", pstream);
+        read_cert_file("srvcrt", pstream);
+        read_cert_file("srvkey", pstream);
+        json_from_env("mode", pstream, ',', false, "1");
+
+        json_from_env("bucket", pstream, ',', false, NULL);
+        json_from_env("nonblock", pstream, ',', false, NULL);
+        json_from_env("expect_statefile", pstream, ',', false, NULL);
+        json_from_env("rm_tmpdir", pstream, ',', false, NULL);
+
+        pstream << '}';
+
+        payload = pstream.str();
+    }
+
     vector<vector<HTTPRequest>> request;
 
     for (unsigned j = 0; j < lambda_regions.size(); j++) {
         request.emplace_back(vector<HTTPRequest>());
         for (int i = 0; i < nlaunch; i++) {
-            string payload = "{\"mode\":\"1\",\"addr\":\"" + ipaddr + "\",\"port\":\"" + ipport + "\", \"cacert\":\"" + cacert + "\"}";
-            //string payload = "{\"mode\":\"1\",\"addr\":\"" + ipaddr + "\",\"port\":\"" + ipport + "\"}";
             LambdaInvocation ll(secret, akid, fn_name, payload, "", LambdaInvocation::InvocationType::Event, lambda_regions[j]);
             request[j].emplace_back(move(ll.to_http_request()));
         }
