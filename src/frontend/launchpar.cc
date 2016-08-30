@@ -24,15 +24,15 @@ SecureSocket new_connection(const Address &addr, const string &name, SSLContext 
 void json_from_env(const char *varname, stringstream &strm, char pre_char, bool throw_if_empty, const char *dflt);
 void read_cert_file(const char *varname, stringstream &strm);
 
+/*
 static const vector<string> lambda_regions = { {"us-east-1"}        // Oregon
-                                             /*
                                              , {"us-west-2"}        // Virginia
                                              , {"eu-west-1"}        // Ireland
                                              , {"eu-central-1"}     // Frankfurt
                                              , {"ap-northeast-1"}   // Tokyo
                                              , {"ap-southeast-2"}   // Sydney
-                                             */
                                              };
+*/
 
 int main(int argc, char **argv)
 {
@@ -92,7 +92,7 @@ void read_cert_file(const char *varname, stringstream &strm) {
     strm << ',' << '"' << varname << "\":\"";
 
     bool started = false;
-    while (true) {
+    while (! cert.eof()) {
         getline(cert, tmp);
         if (tmp.find("-----BEGIN ") == 0) {
             started = true;
@@ -115,6 +115,16 @@ void launchpar(int nlaunch) {
     string fn_name = safe_getenv("LAMBDA_FUNCTION");
     string secret = safe_getenv("AWS_SECRET_ACCESS_KEY");
     string akid = safe_getenv("AWS_ACCESS_KEY_ID");
+
+    vector<string> lambda_regions;
+    {
+        stringstream rstrm(safe_getenv("LAMBDA_REGIONS"));
+        string tmp;
+        while (! rstrm.eof()) {
+            getline(rstrm, tmp, ',');
+            lambda_regions.push_back(tmp);
+        }
+    }
 
     string payload;
     {
@@ -141,7 +151,6 @@ void launchpar(int nlaunch) {
     }
 
     vector<vector<HTTPRequest>> request;
-
     for (unsigned j = 0; j < lambda_regions.size(); j++) {
         request.emplace_back(vector<HTTPRequest>());
         for (int i = 0; i < nlaunch; i++) {
