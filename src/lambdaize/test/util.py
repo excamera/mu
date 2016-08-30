@@ -60,6 +60,18 @@ def run_lambda_function_template(event):
     print "Client exiting."
     sys.exit(0)
 
+def run_enc_server(server_run, num_clients=1):
+    print "Server starting."
+
+    try:
+        chainfile = os.path.abspath(os.path.join(sys.path[0], "data/server_chain.pem"))
+        keyfile = os.path.abspath(os.path.join(sys.path[0], "data/server_key.pem"))
+        server_run(num_clients, "6bbb", chainfile, keyfile)
+
+    except:
+        print "Server exception:\n%s" % traceback.format_exc()
+        sys.exit(1)
+
 def server_finish_check_retval(pid):
     (_, status) = os.waitpid(pid, 0)
     retval = status >> 8
@@ -134,14 +146,5 @@ def run_encsrv_test((cmdstring, mode, server_run)):
         run_lambda_function_template(event)
 
     else:
-        print "Server starting."
-
-        try:
-            chainfile = os.path.abspath(os.path.join(sys.path[0], "data/server_chain.pem"))
-            keyfile = os.path.abspath(os.path.join(sys.path[0], "data/server_key.pem"))
-            server_run(1, "6bbb", chainfile, keyfile)
-        except:
-            print "Server exception:\n%s" % traceback.format_exc()
-            sys.exit(1)
-
+        run_enc_server(server_run)
         server_finish_check_retval(pid)

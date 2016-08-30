@@ -3,7 +3,7 @@
 import time
 
 from libmu.defs import Defs
-from libmu.handler import message_responses
+import libmu.handler
 from libmu.socket_nb import SocketNB
 import libmu.util
 
@@ -50,11 +50,13 @@ class MachineState(SocketNB):
 
     def do_handle(self):
         ### handle INFO messages
+        info_updated = False
         for msg in list(self.recv_queue):
         # use list(deque) so that we can modify the deque inside the iteration
             if msg[:4] == 'INFO':
                 if Defs.debug:
                     print "SERVER HANDLING", msg
+                info_updated = True
                 self.recv_queue.remove(msg)
 
                 vv = msg[5:].split(':', 1)
@@ -63,6 +65,7 @@ class MachineState(SocketNB):
 
                 self.info[vv[0]] = vv[1]
 
+        if info_updated:
             self.info_updated()
 
         ### handle state transitions
@@ -74,6 +77,10 @@ class MachineState(SocketNB):
             msg = state.dequeue()
             if Defs.debug:
                 print "SERVER HANDLING", msg
+
+            if msg[:4] == "FAIL":
+                return ErrorState(msg)
+
             try:
                 state = state.transition(msg)
             except ValueError:
@@ -211,7 +218,7 @@ class CommandListState(MultiPassState):
 
         # explicit expect if given, otherwise set expect based on previous command
         self.expects = [ self.commandlist[0][0] if isinstance(self.commandlist[0], tuple) else "OK" ]
-        self.expects += [ cmd[0] if isinstance(cmd, tuple) else message_responses.get(pc, "OK")
+        self.expects += [ cmd[0] if isinstance(cmd, tuple) else libmu.handler.expected_response(pc)
                           for (cmd, pc) in zip(self.commandlist[1:], self.commands[:-1]) ]
 
         if self.expects[0] is None:
@@ -294,6 +301,8 @@ class SuperpositionState(MachineState):
     def info_updated(self):
         for s in self.states:
             s.info_updated()
+
+        self.update_flags()
 
     def _match_expect(self, msg, expect):
         if isinstance(expect, list):

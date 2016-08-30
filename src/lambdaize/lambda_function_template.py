@@ -26,10 +26,9 @@ def accept_new_connection(vals):
 ###
 def send_output_state(vals):
     with open(vals['_tmpdir'] + "/final.state", 'r') as f:
-        indata = ("STATE(%d):" % vals['prev_iter']) + base64.b64encode(zlib.compress(f.read()))
+        indata = ("STATE(%d):" % vals['run_iter']) + base64.b64encode(zlib.compress(f.read()))
 
     vals['nxtsock'].enqueue(indata)
-    vals['prev_iter'] += 1
 
 ###
 #  get state file from prvsock
@@ -38,13 +37,16 @@ def get_input_state(vals):
     indata = vals['prvsock'].dequeue()
     (msg, data) = indata.split(':', 1)
 
+    if Defs.debug:
+        print "CLIENT received from neighbor: %s... (%d)" % (msg, len(data))
+
     assert msg[:6] == "STATE("
     lind = 6
     rind = msg.find(')')
     statenum = int(msg[lind:rind])
 
     with open(vals['_tmpdir'] + "/temp.state", 'w') as f:
-        f.write(base64.b64decode(zlib.decompress(data)))
+        f.write(zlib.decompress(base64.b64decode(data)))
 
     os.rename(vals['_tmpdir'] + "/temp.state", vals['_tmpdir'] + "/%d.state" % statenum)
 
@@ -113,8 +115,8 @@ def make_cmdstring(msg, vals):
         command = command.replace('##OUTFILE##', useoutfile)
 
     # statefile
-    if vals['prev_iter'] != 0 and vals['expect_statefile']:
-        instatefile = "##TMPDIR##/%d.state" % (vals['prev_iter'] - 1)
+    if vals['run_iter'] != 0 and vals['expect_statefile']:
+        instatefile = "##TMPDIR##/%d.state" % (vals['run_iter'] - 1)
         instatewait = 'while [ ! -f "%s" ]; do sleep 1; done; ' % instatefile
         instateswitch = '-I "' + instatefile + '"'
     else:
@@ -126,6 +128,9 @@ def make_cmdstring(msg, vals):
     # local tempdir
     # NOTE this replacement must come after infile and outfile because they may refer to ##TMPDIR##
     command = command.replace("##TMPDIR##", vals['_tmpdir'])
+
+    if Defs.debug:
+        print "CLIENT running '%s'" % command
 
     return command
 
@@ -177,7 +182,7 @@ def lambda_handler(event, _):
            , 'nonblock': nonblock
            , 'expect_statefile': expect_statefile
            , 'rm_tmpdir': rm_tmpdir
-           , 'prev_iter': 0
+           , 'run_iter': 0
            , '_tmpdir': tempfile.mkdtemp(prefix="lambda_", dir="/tmp")
            }
 
@@ -211,7 +216,7 @@ def lambda_handler(event, _):
 
         # do all the reads we can
         for r in rfds:
-            if vals.get('lsnsock') is not None and r is vals['lsnsock']:
+            if vals.get('lsnsock') is not None and r.fileno() == vals['lsnsock'].fileno():
                 accept_new_connection(vals)
                 continue
 

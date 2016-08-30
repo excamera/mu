@@ -242,7 +242,7 @@ def do_close_listen(_, vals):
 #  connect to peer lambda
 ###
 def do_connect(msg, vals):
-    if vals.get('nxtsock') is None:
+    if vals.get('nxtsock') is not None:
         # already connected
         vals['cmdsock'].enqueue("FAIL(already connected)")
         return False
@@ -259,7 +259,7 @@ def do_connect(msg, vals):
         return True
     vals['nxtsock'] = cs
 
-    vals['cmdsock'].enqueue('OK:CONNECT(%d)' % msg)
+    vals['cmdsock'].enqueue('OK:CONNECT(%s)' % msg)
     return False
 
 ###
@@ -304,17 +304,21 @@ def handle_message(msg, vals):
     vals['cmdsock'].enqueue("FAIL(no such command '%s')" % msg)
     return False
 
-message_responses = { 'set:': 'OK:SET'
-                    , 'seti:': 'OK:SETI'
-                    , 'get:': 'OK:GET'
-                    , 'geti:': 'OK:GETI'
-                    , 'dump_vals:': 'OK:DUMP_VALS'
-                    , 'retrieve:': 'OK:RETRIEV'
-                    , 'upload:': 'OK:UPLOAD'
-                    , 'echo:': 'OK:ECHO'
-                    , 'run:': 'OK:R'
-                    , 'listen:': 'OK:LISTEN'
-                    , 'close_listen:': 'OK:CLOSE_LISTEN'
-                    , 'connect:': 'OK:CONNECT'
-                    , 'close_connect:': 'OK:CLOSE_CONNECT'
+message_responses = { 'set': 'OK:SET'
+                    , 'seti': 'OK:SETI'
+                    , 'get': 'OK:GET'
+                    , 'geti': 'OK:GETI'
+                    , 'dump_vals': 'OK:DUMP_VALS'
+                    , 'retrieve': 'OK:RETRIEV'
+                    , 'upload': 'OK:UPLOAD'
+                    , 'echo': 'OK:ECHO'
+                    , 'run': 'OK:R'
+                    , 'listen': 'OK:LISTEN'
+                    , 'close_listen': 'OK:CLOSE_LISTEN'
+                    , 'connect': 'OK:CONNECT'
+                    , 'close_connect': 'OK:CLOSE_CONNECT'
                     }
+def expected_response(msg):
+    cmd = msg.split(':', 1)[0]
+    expected = message_responses.get(cmd, "OK")
+    return expected

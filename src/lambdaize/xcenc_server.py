@@ -3,7 +3,7 @@
 import socket
 import sys
 
-from libmu import server, TerminalState, CommandListState, OnePassState, IfElseState, SuperpositionState, InfoWatcherState, ForLoopState
+from libmu import server, Defs, TerminalState, CommandListState, OnePassState, IfElseState, SuperpositionState, InfoWatcherState, ForLoopState
 
 class ServerInfo(object):
     states = []
@@ -22,17 +22,26 @@ class XCEncUploadState(CommandListState):
 
 class XCEncRunState(CommandListState):
     extra = "(running xc-enc)"
-    commandlist = [ (None, "run:")
+    commandlist = [ (None, "seti:run_iter:")
+                  , "run:"
                   , ("OK:RUNNING", None)
                   , ("OK:RETVAL(0)", None)
                   ]
+
+    def __init__(self, prevState, aNum=0):
+        super(XCEncRunState, self).__init__(prevState, aNum)
+        self.commands[0] = "seti:run_iter:%d" % (self.info['iter_key'] - 1)
 
 class XCEncLoopState(ForLoopState):
     extra = "(xc-enc looping)"
     loopState = XCEncRunState
     exitState = XCEncUploadState
-    iterFin = ServerInfo.num_passes
-    # XXX maybe make this evaluated at construction time s.t. we can change it on the fly
+
+    def __init__(self, prevState, aNum=0):
+        super(XCEncLoopState, self).__init__(prevState, aNum)
+
+        # we need at most actorNum + 1 passes
+        self.iterFin = min(ServerInfo.num_passes, self.actorNum + 1)
 
 # need to do this here to avoid use-before-def
 XCEncRunState.nextState = XCEncLoopState
@@ -124,12 +133,13 @@ class XCEncSetNeighborConnectState(OnePassState):
         if lsnport is None:
             raise Exception("Error: got OK:LISTEN but no corresponding INFO for lsnport")
 
-        (lsnip, _) = self.sock.getpeername()
-        neighbor = self.actorNum - 1
-        ServerInfo.states[neighbor].info['connecthost'] = (lsnip, lsnport)
+        if self.actorNum is not 0:
+            (lsnip, _) = self.sock.getpeername()
+            neighbor = self.actorNum - 1
+            ServerInfo.states[neighbor].info['connecthost'] = (lsnip, lsnport)
 
-        # let the neighbor know that its info has been updated
-        ServerInfo.states[neighbor].info_updated()
+            # let the neighbor know that its info has been updated
+            ServerInfo.states[neighbor].info_updated()
 
         return self.nextState(self)
 
@@ -166,5 +176,8 @@ if __name__ == "__main__":
     bname = "6bbb"
     if len(sys.argv) > 2:
         bname = sys.argv[2]
+
+    if len(sys.argv) > 3:
+        ServerInfo.num_passes = int(sys.argv[3])
 
     run(nparts, bname)

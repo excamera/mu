@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 import sys
-import os.path
+import os
 sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], os.pardir)))
 # insert parent directory in search path, since test/ lives alongside libmu
 
