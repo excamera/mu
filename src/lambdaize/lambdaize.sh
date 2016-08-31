@@ -122,13 +122,19 @@ if [ -f "$EXTRA_PACKAGES" ]; then
     tar -C "$TMPDIR" -xzpf "$EXTRA_PACKAGES"
     if [ $? != 0 ]; then
         echo "ERROR: could not extract extra packages '""$EXTRA_PACKAGES""'"
+        cd "$SAVEPWD"
+        rm -r "$TMPDIR"
         exit 1
     fi
 fi
 LIBMU_DIRECTORY="$LAMBDAIZE_DIRNAME"/libmu
-if [ -d "$LIBMU_DIRECTORY" ]; then
-    cp -R "$LIBMU_DIRECTORY" "$TMPDIR"
+if [ ! -d "$LIBMU_DIRECTORY" ]; then
+    echo "ERROR: cannot find libmu."
+    cd "$SAVEPWD"
+    rm -r "$TMPDIR"
+    exit 1
 fi
+cp -R "$LIBMU_DIRECTORY" "$TMPDIR"
 
 #
 # if we're allowing dynamic libraries, copy over the libraries

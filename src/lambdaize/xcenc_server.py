@@ -3,7 +3,8 @@
 import socket
 import sys
 
-from libmu import server, Defs, TerminalState, CommandListState, OnePassState, IfElseState, SuperpositionState, InfoWatcherState, ForLoopState
+import pylaunch
+from libmu import server, TerminalState, CommandListState, OnePassState, IfElseState, SuperpositionState, InfoWatcherState, ForLoopState
 
 class ServerInfo(object):
     states = []

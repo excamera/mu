@@ -27,6 +27,10 @@ PKG_CHECK_MODULES([OpenSSL], [libssl libcrypto])
 
 # Checks for library functions.
 
+# Check for Python
+AM_PATH_PYTHON(2.7)
+AM_CHECK_PYTHON_HEADERS(,[AC_MSG_ERROR(could not find Python headers)])
+
 AC_CONFIG_FILES([
 	Makefile
 	src/Makefile
@@ -36,6 +40,7 @@ AC_CONFIG_FILES([
 	src/frontend/Makefile
 	src/lambdareq/Makefile
 	src/launch/Makefile
+	src/pylaunch/Makefile
 	src/lambdaize/Makefile
 	src/tests/Makefile])
 

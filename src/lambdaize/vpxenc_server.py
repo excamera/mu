@@ -3,6 +3,7 @@
 import socket
 import sys
 
+import pylaunch
 from libmu import server, TerminalState, CommandListState
 
 class FinalState(TerminalState):

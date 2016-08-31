@@ -1,1 +1,1 @@
-SUBDIRS = util net http lambdareq lambdaize launch frontend tests
+SUBDIRS = util net http lambdareq launch pylaunch lambdaize frontend tests
