@@ -9,7 +9,7 @@ AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIRS([m4])
 
 # Add C++ flags
-CXX14_FLAGS="-std=c++14 -pthread"
+CXX14_FLAGS="-fPIC -std=c++14 -pthread"
 PICKY_CXXFLAGS="-Wall -Wpedantic -Wextra -Weffc++ -Werror"
 AC_SUBST([CXX14_FLAGS])
 AC_SUBST([PICKY_CXXFLAGS])
@@ -35,6 +35,7 @@ AC_CONFIG_FILES([
 	src/http/Makefile
 	src/frontend/Makefile
 	src/lambdareq/Makefile
+	src/launch/Makefile
 	src/lambdaize/Makefile
 	src/tests/Makefile])
 

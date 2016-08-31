@@ -1,9 +1,9 @@
 AM_CPPFLAGS = $(CXX14_FLAGS) -I$(srcdir)/../util
 AM_CXXFLAGS = $(PICKY_CXXFLAGS)
 
-noinst_LIBRARIES = libhttp.a
+noinst_LTLIBRARIES = libhttp.la
 
-libhttp_a_SOURCES = http_request_parser.hh \
+libhttp_la_SOURCES = http_request_parser.hh \
         http_request.hh http_request.cc \
         http_response.hh http_response.cc \
         http_header.hh http_header.cc \

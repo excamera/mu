@@ -1,6 +1,6 @@
 AM_CPPFLAGS = $(CXX14_FLAGS) -I$(srcdir)/../util -I$(srcdir)/../http
 AM_CXXFLAGS = $(PICKY_CXXFLAGS)
 
-noinst_LIBRARIES = liblambdareq.a
+noinst_LTLIBRARIES = liblambdareq.la
 
-liblambdareq_a_SOURCES = awsv4_sig.hh awsv4_sig.cc lambda_request.hh lambda_request.cc
+liblambdareq_la_SOURCES = awsv4_sig.hh awsv4_sig.cc lambda_request.hh lambda_request.cc
