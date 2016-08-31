@@ -1,6 +1,7 @@
 /* -*-mode:c++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 
 #include <iostream>
+#include <string>
 #include <time.h>
 #include <unistd.h>
 
@@ -24,7 +25,14 @@ void launchpar(int nlaunch, string fn_name, string akid, string secret, string p
     for (unsigned j = 0; j < lambda_regions.size(); j++) {
         request.emplace_back(vector<HTTPRequest>());
         for (int i = 0; i < nlaunch; i++) {
-            LambdaInvocation ll(secret, akid, fn_name, payload, "", LambdaInvocation::InvocationType::Event, lambda_regions[j]);
+            // replace ##ID## with launch number if it's in the string
+            string local_payload = payload;
+            int id_idx = local_payload.find("##ID##");
+            if (id_idx >= 0) {
+                local_payload.replace(id_idx, 6, to_string(j*nlaunch + i));
+            }
+
+            LambdaInvocation ll(secret, akid, fn_name, local_payload, "", LambdaInvocation::InvocationType::Event, lambda_regions[j]);
             request[j].emplace_back(move(ll.to_http_request()));
         }
     }
