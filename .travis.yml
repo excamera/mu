@@ -10,7 +10,6 @@ addons:
     - g++-5
     - vpx-tools
     - python-dev
-    - libpython-dev
 
 before_script:
   - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 99

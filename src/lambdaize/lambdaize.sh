@@ -20,6 +20,7 @@ if [ ${#@} -lt 1 ]; then
     echo "    AWS_ROLE (required, no default) role to use when executing function"
     echo "    MEM_SIZE (optional, default ${DEFAULT_MEM_SIZE}, range 128-1536) size of lambda's memory"
     echo "    TIMEOUT (optional, default ${DEFAULT_TIMEOUT}) execution timeout in seconds"
+    echo "    SKIP_UPLOAD (optional) don't upload the resulting zipfile to lambda"
     echo "    ALLOW_LD (optional) allow dynamic executable (this could break!)"
     exit 1
 fi
@@ -119,7 +120,7 @@ shift
 #
 EXTRA_PACKAGES="$LAMBDAIZE_DIRNAME"/"$EXTRA_PACKAGE_FILE"
 if [ -f "$EXTRA_PACKAGES" ]; then
-    tar -C "$TMPDIR" -xzpf "$EXTRA_PACKAGES"
+    tar -C "$TMPDIR" --strip-components 1 -xzpf "$EXTRA_PACKAGES"
     if [ $? != 0 ]; then
         echo "ERROR: could not extract extra packages '""$EXTRA_PACKAGES""'"
         cd "$SAVEPWD"
@@ -192,13 +193,15 @@ rm -r "$TMPDIR"
 #
 # upload to lambda
 #
-aws lambda create-function \
-    --runtime python2.7 \
-    --role "$AWS_ROLE" \
-    --handler lambda_function.lambda_handler \
-    --function-name "$FUNNAME" \
-    --description "$WORKFILE" \
-    --timeout "$TIMEOUT" \
-    --memory-size "$MEM_SIZE" \
-    --publish \
-    --zip-file fileb://"$ZIPFILE"
+if [ -z "$SKIP_UPLOAD" ]; then
+    aws lambda create-function \
+        --runtime python2.7 \
+        --role "$AWS_ROLE" \
+        --handler lambda_function.lambda_handler \
+        --function-name "$FUNNAME" \
+        --description "$WORKFILE" \
+        --timeout "$TIMEOUT" \
+        --memory-size "$MEM_SIZE" \
+        --publish \
+        --zip-file fileb://"$ZIPFILE"
+fi

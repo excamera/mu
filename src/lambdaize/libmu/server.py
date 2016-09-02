@@ -10,9 +10,34 @@ import libmu.defs
 import libmu.machine_state
 
 ###
+#  handle new connection on server listening socket
+###
+def _handle_server_sock(ls, states, num_parts, constructor):
+    (ns, _) = ls.accept()
+    ns.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    ns.setblocking(False)
+
+    nstate = constructor(ns, len(states))
+    nstate.do_handshake()
+
+    states.append(nstate)
+
+    if len(states) == num_parts:
+        # no need to listen any longer, we have all our connections
+        try:
+            ls.shutdown()
+            ls.close()
+        except:
+            pass
+
+        ls = None
+
+    return ls
+
+###
 #  server mainloop
 ###
-def server_main_loop(states, handle_server_sock, num_parts, basename, chainfile=None, keyfile=None):
+def server_main_loop(states, constructor, num_parts, chainfile=None, keyfile=None):
     # bro, you listening to this?
     lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     lsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -70,7 +95,7 @@ def server_main_loop(states, handle_server_sock, num_parts, basename, chainfile=
 
         for r in rfds:
             if r is lsock:
-                lsock = handle_server_sock(lsock, states, num_parts, basename)
+                lsock = _handle_server_sock(lsock, states, num_parts, constructor)
 
             else:
                 rnext = r.do_read()

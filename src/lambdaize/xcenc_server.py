@@ -1,6 +1,5 @@
 #!/usr/bin/python
 
-import socket
 import sys
 
 import pylaunch
@@ -8,7 +7,9 @@ from libmu import server, TerminalState, CommandListState, OnePassState, IfElseS
 
 class ServerInfo(object):
     states = []
+    video_name = "6bbb"
     num_passes = 4
+    num_parts = 1
 
 class FinalState(TerminalState):
     extra = "(finished)"
@@ -31,7 +32,7 @@ class XCEncRunState(CommandListState):
 
     def __init__(self, prevState, aNum=0):
         super(XCEncRunState, self).__init__(prevState, aNum)
-        self.commands[0] = "seti:run_iter:%d" % (self.info['iter_key'] - 1)
+        self.commands[0] = "seti:run_iter:%d" % (self.info['iter_key'])
 
 class XCEncLoopState(ForLoopState):
     extra = "(xc-enc looping)"
@@ -56,7 +57,7 @@ class XCEncMaybeDoConnect(CommandListState):
     def __init__(self, prevState, aNum=0):
         super(XCEncMaybeDoConnect, self).__init__(prevState, aNum)
         # fill in correct command
-        if self.info.get('do_fwconn'):
+        if self.info['do_fwconn']:
             self.commands[0] = "connect:%s:%d" % self.info['connecthost']
         else:
             del self.commands[1]
@@ -76,7 +77,7 @@ class XCEncStartConnect(IfElseState):
     alternativeState = XCEncWaitForConnectHost
 
     def testfn(self):
-        return (not self.info.get('do_fwconn')) or (self.info.get('connecthost') is not None)
+        return (not self.info['do_fwconn']) or (self.info.get('connecthost') is not None)
 
 class XCEncFinishRetrieve(CommandListState):
     extra = "(waiting for retrieval confirmation)"
@@ -107,7 +108,7 @@ class XCEncSettingsState(CommandListState):
         super(XCEncSettingsState, self).__init__(prevState, aNum)
         # set up commands
         aNum = self.actorNum
-        vName = self.info['vidName']
+        vName = ServerInfo.video_name
         self.commands = [ s.format(vName, "%06d" % aNum) if s is not None else None for s in self.commands ]
 
 class XCEncSetNeighborConnectState(OnePassState):
@@ -115,12 +116,11 @@ class XCEncSetNeighborConnectState(OnePassState):
     expect = "OK:LISTEN"
     nextState = XCEncSettingsState
 
-    def __init__(self, prevState, aNum, vName, do_fwconn):
+    def __init__(self, prevState, aNum):
         super(XCEncSetNeighborConnectState, self).__init__(prevState, aNum)
 
         # store these for later
-        self.info['do_fwconn'] = do_fwconn
-        self.info['vidName'] = vName
+        self.info['do_fwconn'] = aNum != (ServerInfo.num_parts - 1)
 
         # all except actor #0 should expect a statefile from its neighbor
         if aNum is not 0:
@@ -144,41 +144,17 @@ class XCEncSetNeighborConnectState(OnePassState):
 
         return self.nextState(self)
 
-def handle_server_sock(ls, states, num_parts, basename):
-    (ns, _) = ls.accept()
-    ns.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-    ns.setblocking(False)
-
-    nstate = XCEncSetNeighborConnectState(ns, len(states), basename, len(states) is not num_parts - 1)
-    nstate.do_handshake()
-
-    states.append(nstate)
-
-    if len(states) == num_parts:
-        # no need to listen any longer, we have all our connections
-        try:
-            ls.shutdown()
-            ls.close()
-        except:
-            pass
-
-        ls = None
-
-    return ls
-
-def run(num_parts, basename, chainfile=None, keyfile=None):
-    server.server_main_loop(ServerInfo.states, handle_server_sock, num_parts, basename, chainfile, keyfile)
+def run(chainfile=None, keyfile=None):
+    server.server_main_loop(ServerInfo.states, XCEncSetNeighborConnectState, ServerInfo.num_parts, chainfile, keyfile)
 
 if __name__ == "__main__":
-    nparts = 1
     if len(sys.argv) > 1:
-        nparts = int(sys.argv[1])
+        ServerInfo.num_parts = int(sys.argv[1])
 
-    bname = "6bbb"
     if len(sys.argv) > 2:
-        bname = sys.argv[2]
+        ServerInfo.video_name = sys.argv[2]
 
     if len(sys.argv) > 3:
         ServerInfo.num_passes = int(sys.argv[3])
 
-    run(nparts, bname)
+    run()

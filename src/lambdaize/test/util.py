@@ -60,13 +60,13 @@ def run_lambda_function_template(event):
     print "Client exiting."
     sys.exit(0)
 
-def run_enc_server(server_run, num_clients=1):
+def run_enc_server(server_run):
     print "Server starting."
 
     try:
         chainfile = os.path.abspath(os.path.join(sys.path[0], "data/server_chain.pem"))
         keyfile = os.path.abspath(os.path.join(sys.path[0], "data/server_key.pem"))
-        server_run(num_clients, "6bbb", chainfile, keyfile)
+        server_run(chainfile, keyfile)
 
     except:
         print "Server exception:\n%s" % traceback.format_exc()

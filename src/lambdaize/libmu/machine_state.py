@@ -254,11 +254,11 @@ class ForLoopState(OnePassState):
 
         # initialize the loop
         if self.info.get(self.breakKey) is None:
-            self.info[self.iterKey] = self.iterInit
+            self.info[self.iterKey] = self.iterInit - 1
             self.info[self.breakKey] = False
 
     def post_transition(self):
-        if self.info[self.iterKey] >= self.iterFin or self.info[self.breakKey]:
+        if self.info[self.iterKey] >= (self.iterFin - 1) or self.info[self.breakKey]:
             del self.info[self.breakKey]
             return self.exitState(self)
         else:
