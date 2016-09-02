@@ -186,7 +186,7 @@ done
 # create archive
 #
 cd "$TMPDIR"
-zip -r "$ZIPFILE" .
+zip -q -r "$ZIPFILE" .
 cd "$SAVEPWD"
 rm -r "$TMPDIR"
 
