@@ -10,12 +10,12 @@ import libmu
 import test.defs
 import test.util
 
-def run_tests(use_mode):
+def run_tests(use_mode, use_nonblock):
     libmu.Defs.debug = True
 
     event = { 'mode': use_mode
             , 'port': 13579
-            , 'nonblock': 0
+            , 'nonblock': use_nonblock
             , 'cacert': test.defs.Defs.cacert
             , 'srvcrt': test.defs.Defs.srvcrt
             , 'srvkey': test.defs.Defs.srvkey
@@ -28,10 +28,12 @@ if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] is "0":
         lambda_function_template.cmdstring = "##INSTATEWAIT## /home/kwantam/git/github.com/alfalfa/src/frontend/xc-enc -s ##QUALITY## -i y4m ##INSTATESWITCH## -O ##TMPDIR##/final.state -o ##OUTFILE## ##INFILE##"
         mode = 2
+        nonblock = 1
 
     elif sys.argv[1] is "1":
         lambda_function_template.cmdstring = "/home/kwantam/git/github.com/daala_tools/png2y4m -o ##OUTFILE## ##INFILE##"
         mode = 1
+        nonblock = 0
 
     else:
         print "Usage: %s <0|1>" % sys.argv[0]
@@ -39,4 +41,4 @@ if __name__ == "__main__":
         print "1 : run png2y4m client"
         sys.exit(1)
 
-    run_tests(mode)
+    run_tests(mode, nonblock)

@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+import cProfile
+import getopt
 import json
 import os
 import select
@@ -11,6 +13,7 @@ from OpenSSL import SSL
 import pylaunch
 import libmu.defs
 import libmu.machine_state
+import libmu.util
 
 ###
 #  handle new connection on server listening socket
@@ -63,12 +66,17 @@ def server_launch(server_info, event, akid, secret):
 ###
 #  server mainloop
 ###
-def server_main_loop(states, constructor, num_parts, chainfile=None, keyfile=None, outfile=None):
+def server_main_loop(states, constructor, server_info, chainfile=None, keyfile=None):
+    # handle profiling if specified
+    if server_info.profiling:
+        pr = cProfile.Profile()
+        pr.enable()
+
     # bro, you listening to this?
     lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     lsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     lsock.bind(('0.0.0.0', 13579))
-    lsock.listen(num_parts + 10) # lol like the kernel listens to me
+    lsock.listen(server_info.num_parts + 10) # lol like the kernel listens to me
 
     sslctx = SSL.Context(SSL.TLSv1_2_METHOD)
     sslctx.set_options(SSL.OP_NO_COMPRESSION)
@@ -76,12 +84,14 @@ def server_main_loop(states, constructor, num_parts, chainfile=None, keyfile=Non
     sslctx.set_verify(SSL.VERIFY_NONE, lambda *_: True)
 
     # set up server key
-    if chainfile is None or keyfile is None:
-        sslctx.use_certificate_chain_file(os.environ.get('CERTIFICATE_CHAIN', 'server_chain.pem'))
-        sslctx.use_privatekey_file(os.environ.get('PRIVATE_KEY', 'server_key.pem'))
-    else:
+    if chainfile is not None and keyfile is not None:
         sslctx.use_certificate_chain_file(chainfile)
         sslctx.use_privatekey_file(keyfile)
+    elif server_info.srvcrtfile is not None and server_info.srvkeyfile is not None:
+        sslctx.use_certificate_chain_file(server_info.srvcrtfile)
+        sslctx.use_privatekey_file(server_info.srvkeyfile)
+    else:
+        raise Exception("ERROR: you must supply a server cert and key!")
     sslctx.check_privatekey()
 
     # set up server SSL connection
@@ -139,7 +149,7 @@ def server_main_loop(states, constructor, num_parts, chainfile=None, keyfile=Non
         for (fd, ev) in pfds:
             if (ev & select.POLLIN) != 0:
                 if lsock is not None and fd == lsock.fileno():
-                    lsock = _handle_server_sock(lsock, states, statemap, num_parts, constructor)
+                    lsock = _handle_server_sock(lsock, states, statemap, server_info.num_parts, constructor)
 
                 else:
                     actorNum = statemap[fd]
@@ -164,8 +174,8 @@ def server_main_loop(states, constructor, num_parts, chainfile=None, keyfile=Non
     fo = None
     error = []
     errvals = []
-    if outfile is not None:
-        fo = open(outfile, 'w')
+    if server_info.out_file is not None:
+        fo = open(server_info.out_file, 'w')
 
     for (state, num) in zip(states, range(0, len(states))):
         state.close()
@@ -173,8 +183,140 @@ def server_main_loop(states, constructor, num_parts, chainfile=None, keyfile=Non
             error.append(num)
             errvals.append(repr(state))
         elif fo is not None:
-            fo.write("%d:%s" % (state.actorNum, str(state.get_timestamps())))
+            fo.write("%d:%s\n" % (state.actorNum, str(state.get_timestamps())))
+
+    if server_info.profiling:
+        pr.disable()
+        pr.dump_stats(server_info.profiling)
 
     if error:
         evals = str(error) + "\n  " + "\n  ".join(errvals)
+        if fo is not None:
+            fo.write("ERR:%s\n" % str(error))
+            fo.close() # we'll never get to the close below
         raise Exception("ERROR: the following workers terminated abnormally:\n%s" % evals)
+
+    if fo is not None:
+        fo.close()
+
+###
+#  server usage message
+###
+def usage(defaults):
+    oFileStr = "'%s'" % defaults.out_file if defaults.out_file is not None else "None"
+    pFileStr = "'%s'" % defaults.profiling if defaults.profiling is not None else "None"
+    print "Usage: %s [-h] [-D] [-O oFile] [-P pFile]" % sys.argv[0]
+    print "       [-n nParts] [-f nFrames] [-o nOffset]"
+    print "       [-v vidName] [-b bucket] [-i inFormat]"
+    print "       [-l fnName] [-r region1,region2,...]"
+    print "       [-c caCert] [-s srvCert] [-k srvKey]"
+    print
+    print "You must also set the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY envvars."
+    print
+    print "  switch         description                                     default"
+    print "  --             --                                              --"
+    print "  -h:            show this message"
+    print "  -D:            enable debug                                    (disabled)"
+    print "  -O oFile:      state machine times output file                 (%s)" % oFileStr
+    print "  -P pFile:      profiling data output file                      (%s)" % pFileStr
+    print
+    print "  -n nParts:     launch nParts lambdas                           (%d)" % defaults.num_parts
+    print "  -f nFrames:    number of frames to process in each chunk       (%d)" % defaults.num_frames
+    print "  -o nOffset:    skip this many input chunks when processing     (%d)" % defaults.num_offset
+    if hasattr(defaults, 'num_passes'):
+        print "  -p nPasses:    number of xcenc passes                          (%d)" % defaults.num_passes
+    print
+    print "  -v vidName:    video name                                      ('%s')" % defaults.video_name
+    print "  -b bucket:     S3 bucket in which videos are stored            ('%s')" % defaults.bucket
+    if hasattr(defaults, 'in_format'):
+        print "  -i inFormat:   input format ('png16', 'y4m_06', etc)           ('%s')" % defaults.in_format
+    print
+    print "  -l fnName:     lambda function name                            ('%s')" % defaults.lambda_function
+    print "  -r r1,r2,...:  comma-separated list of regions                 ('%s')" % ','.join(defaults.regions)
+    print
+    print "  -c caCert:     CA certificate file                             (None)"
+    print "  -s srvCert:    server certificate file                         (None)"
+    print "  -k srvKey:     server key file                                 (None)"
+    print "(hint: you can generate new keys with <mu>/bin/genkeys.sh)"
+
+def options(server_info):
+    defaults = server_info()
+
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "o:f:n:v:l:r:Dc:s:k:i:b:hO:P:p:")
+    except getopt.GetoptError as err:
+        print str(err)
+        usage(defaults)
+        sys.exit(1)
+
+    if len(args) > 0:
+        print "ERROR: Extraneous arguments '%s'" % ' '.join(args)
+        print
+        usage(defaults)
+        sys.exit(1)
+
+    server_info.cacertfile = os.environ.get('CA_CERT')
+    server_info.srvcrtfile = os.environ.get('SRV_CERT')
+    server_info.srvkeyfile = os.environ.get('SRV_KEY')
+
+    for (opt, arg) in opts:
+        if opt == "-o":
+            server_info.num_offset = int(arg)
+        elif opt == "-f":
+            server_info.num_frames = int(arg)
+        elif opt == "-n":
+            server_info.num_parts = int(arg)
+        elif opt == "-v":
+            server_info.video_name = arg
+        elif opt == "-l":
+            server_info.lambda_function = arg
+        elif opt == "-r":
+            server_info.regions = arg.split(',')
+        elif opt == "-D":
+            libmu.defs.Defs.debug = True
+        elif opt == "-c":
+            server_info.cacertfile = arg
+        elif opt == "-s":
+            server_info.srvcrtfile = arg
+        elif opt == "-k":
+            server_info.srvkeyfile = arg
+        elif opt == "-b":
+            server_info.bucket = arg
+        elif opt == "-i":
+            server_info.in_format = arg
+        elif opt == "-h":
+            usage(defaults)
+            sys.exit(1)
+        elif opt == "-O":
+            server_info.out_file = arg
+        elif opt == "-P":
+            server_info.profiling = arg
+        elif opt == "-p":
+            server_info.num_passes = int(arg)
+        else:
+            assert False, "logic error: got unexpected option %s from getopt" % opt
+
+    if len(server_info.regions) == 0:
+        print "ERROR: region list cannot be empty"
+        print
+        usage(defaults)
+        sys.exit(1)
+
+    if os.environ.get("AWS_ACCESS_KEY_ID") is None or os.environ.get("AWS_SECRET_ACCESS_KEY") is None:
+        print "ERROR: You must set the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY envvars"
+        print
+        usage(defaults)
+        sys.exit(1)
+
+    for f in [server_info.cacertfile, server_info.srvcrtfile, server_info.srvkeyfile]:
+        try:
+            os.stat(str(f))
+        except:
+            print "ERROR: Cannot open SSL cert or key file '%s'" % str(f)
+            print
+            usage(defaults)
+            sys.exit(1)
+
+    server_info.cacert = libmu.util.read_pem(server_info.cacertfile)
+    server_info.srvcrt = libmu.util.read_pem(server_info.srvcrtfile)
+    server_info.srvkey = libmu.util.read_pem(server_info.srvkeyfile)
