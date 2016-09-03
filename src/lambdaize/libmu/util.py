@@ -159,3 +159,22 @@ def rand_str(slen):
             ostr += str(cval - 52)
 
     return ostr
+
+###
+#  load cert or pkey from file
+###
+def read_pem(fname):
+    ret = ""
+    with open(fname) as f:
+        started = False
+        for line in f:
+            if line[:11] == "-----BEGIN ":
+                started = True
+                continue
+            elif line[:9] == "-----END ":
+                break
+
+            if started:
+                ret += line.rstrip()
+
+    return ret

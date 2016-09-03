@@ -3,12 +3,16 @@
 # Example (WIP) #
 
 In this example, we are going to run lambdas that grab PNG files stored on S3 as
-`excamera-us-east-1:sintel-1k-png16/%08d.png`, encode them 6 frames at a time as Y4M files,
-and upload them to `excamera-us-east-1:sintel-1k-y4m_06/%08d.y4m`.
+`mybucket:sintel-1k-png16/%08d.png`, encode them 6 frames at a time as Y4M files,
+and upload them to `mybucket:sintel-1k-y4m_06/%08d.y4m`.
 
 ## Prerequisites ##
 
-I'm assuming you're using a Debian-ish system of recent vintage (I'm running Debian testing).
+I assume that you've already got the `mybucket:sintel-1k-png16/%08d.png` files. You should
+get these [from Xiph](http://media.xiph.org/sintel/sintel-1k-png16/) and upload them to S3.
+
+I also assume you're using a Debian-ish system of recent vintage (I'm running Debian testing
+as of September 2016).
 
 You will need the following packages:
 
@@ -26,7 +30,7 @@ Put these in your environment now so that you don't forget!
 
     export AWS_ACCESS_KEY_ID=xxxxxx
     export AWS_SECRET_ACCESS_KEY=yyyyyy
-    export AWS_ROLE=lambdarole
+    export AWS_ROLE=arn:aws:iam::0123456789:role/somerole
 
 ## Getting started: building binaries ##
 
@@ -40,15 +44,20 @@ To start, let's build the [mu](https://github.com/excamera/mu) repository:
     ./configure
     make -j$(nproc)
 
-The other thing we'll need is the [daala\_tools](https://github.com/alfalfa/daala_tools) repo.
-**Important:** note `STATIC=1` in the `make` invocation.
+The other thing we'll need is the [daala\_tools](https://github.com/alfalfa/daala_tools) repo,
+which contains the `png2y4m` tool we are going to run on each lambda worker.
+
+**Important:** note `STATIC=1` in the `make` invocation. The
+[lambda environment](http://docs.aws.amazon.com/lambda/latest/dg/current-supported-versions.html)
+probably does not have the same system libraries as our machine, so to be safe, we should only
+use statically linked binaries on lambda workers.
 
     cd /tmp/mu_example
     git clone https://github.com/alfalfa/daala_tools
     cd daala_tools
     make -j$(nproc) STATIC=1
 
-## Building the lambda function ##
+## Assembling the lambda function ##
 
 The next step is preparing a lambda function. Our goal is for the lambda to execute a command
 like `./png2y4m -o /tmp/somefile.y4m /tmp/%08d.png`, which will convert PNGs to a Y4M.  (Don't
@@ -57,25 +66,97 @@ worry, we'll figure out how the PNGs get downloaded below.)
 To do this, we'll invoke the `lambdaize.sh` script in the `mu` repo:
 
     cd /tmp/mu_example
-    MEM_SIZE=512 TIMEOUT=120 ./mu/src/lambdaize/lambdaize.sh \
+    MEM_SIZE=1536 TIMEOUT=180 ./mu/src/lambdaize/lambdaize.sh \
         ./daala_tools/png2y4m \
         '' \
-        '-o ##OUTFILE## ##INFILE##'
+        '-i -d -o ##OUTFILE## ##INFILE##'
 
 `MEM_SIZE` and `TIMEOUT` are configuration options for the lambda function.  Note that this
 command will use `AWS_ROLE` (see above) as the role for executing the lambda function we've
-just created.
+just created. The command's output looks something like:
 
-## Building the coordinating server ##
+    {
+        "CodeSize": 3996942,
+        "LastModified": "2016-09-01T00:00:00.000+0000",
+        "MemorySize": 1536,
+        "CodeSha256": "yv+mJC0/2hsjTcu3BpFwWyhix1YVRimph8O1y8Oy/Lw=",
+        "Description": "png2y4m",
+        "FunctionName": "png2y4m_cP4Mf5pn",
+        "Role": "arn:aws:iam::0123456789:role/somerole",
+        "Handler": "lambda_function.lambda_handler",
+        "Runtime": "python2.7",
+        "Timeout": 180,
+        "Version": "1",
+        "FunctionArn": "arn:aws:lambda:us-east-1:0123456789:function:png2y4m_cP4Mf5pn"
+    }
 
-Finally, we need a server to coordinate lambda instances. The full script is in
+Your new lambda function's name is `png2y4m_cP4Mf5pn`, and you will find a correspondingly-named
+zipfile in `/tmp/mu_example`. `lambdaize.sh` generates a random suffix and appends it to the
+lambda function name to avoid collisions with existing functions.  If you forget the name
+of your function, you can invoke `aws lambda list-functions`.
+
+## Coordinating server ##
+
+Finally, we will run a server to launch and coordinate the lambda instances. The full script is in
 [mu/src/lambdaize/png2y4m\_server.py](https://github.com/excamera/mu/blob/master/src/lambdaize/png2y4m_server.py).
-In this section, we'll walk through it.
+
+    Usage: ./png2y4m_server.py [-h] [-D] [-O oFile] [-P pFile]
+           [-n nParts] [-f nFrames] [-o nOffset]
+           [-v vidName] [-b bucket] [-i inFormat]
+           [-l fnName] [-r region1,region2,...]
+           [-c caCert] [-s srvCert] [-k srvKey]
+    
+    You must also set the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY envvars.
+    
+      switch         description                                     default
+      --             --                                              --
+      -h:            show this message
+      -D:            enable debug                                    (disabled)
+      -O oFile:      state machine times output file (for postproc)  (None)
+      -P pFile:      profiling data                                  (None)
+    
+      -n nParts:     launch nParts lambdas                           (1)
+      -f nFrames:    number of frames to process in each chunk       (6)
+      -o nOffset:    skip this many input chunks when processing     (0)
+    
+      -v vidName:    video name                                      ('sintel-1k')
+      -b bucket:     S3 bucket in which videos are stored            ('excamera-us-east-1')
+      -i inFormat:   PNG format ('png' or 'png16', probably)         ('png16')
+    Input files are 's3://<bucket>/<vidname>-<in_format>/%08d.png'
+    
+      -l fnName:     lambda function name                            ('png2y4m')
+      -r r1,r2,...:  comma-separated list of regions                 ('us-east-1')
+    
+      -c caCert:     CA certificate file                             (None)
+      -s srvCert:    server certificate file                         (None)
+      -k srvKey:     server key file                                 (None)
+    (hint: you can generate new keys with <mu>/bin/genkeys.sh)
+
+We will need to generate SSL certs:
+
+	mkdir -p /tmp/mu_example/ssl
+    cd /tmp/mu_example/ssl
+	/tmp/mu_example/mu/bin/genkeys.sh
+
+Now we're ready to go!
+
+    /tmp/mu_example/mu/src/lambdaize/png2y4m_server.py \
+        -n 5 \
+        -l png2y4m_cP4Mf5pn \
+        -b mybucket \
+        -c /tmp/mu_example/ssl/ca_cert.pem \
+        -s /tmp/mu_example/ssl/server_cert.pem \
+        -k /tmp/mu_example/ssl/server_key.pem
+
+That's it! You're encoding files.
+
+## In more detail... ##
 
 ### pylaunch ###
 
-Coordinating servers can use the `pylaunch` module to launch many lambdas at once in parallel.
-This module is an interface to the C++ library in `mu`. Usage:
+Coordinating servers use the `pylaunch` module to launch many lambdas at once in parallel.
+This module is an interface to [liblaunch](https://github.com/excamera/mu/tree/master/src/launch).
+Usage:
 
     pylaunch.launchpar(num_to_launch, lambda_function_name, \
                        access_key_id, secret_access_key, \
@@ -83,7 +164,7 @@ This module is an interface to the C++ library in `mu`. Usage:
 
 ### `machine_state.py` overview ###
 
-First, an overview: [libmu/machine\_state.py](https://github.com/excamera/mu/tree/master/src/lambdaize/libmu/machine_state.py)
+[libmu/machine\_state.py](https://github.com/excamera/mu/tree/master/src/lambdaize/libmu/machine_state.py)
 provides general functionality for building coordinating servers.
 
 At a high level, the idea is that we can build a state machine out of these generic classes, and
@@ -93,21 +174,28 @@ responses depend on the prior command; all responses indicating success begin wi
 (For more information on commands and responses, see
 [libmu/handler.py](https://github.com/excamera/mu/tree/master/src/lambdaize/libmu/handler.py).)
 
-We represent state machines as subclasses of `MachineState`. `MachineState` defines the general
-state transition framework, but one should never inherit directly from `MachineState`. Instead,
-most of the time a state will inherit from classes like `TerminalState`, `CommandListState`,
-or `ForLoopState`. These are the three subclasses we will be using in this example;
+We represent state machines as subclasses of `MachineState`, which is itself a subclass of
+`SocketNB`. `SocketNB` is a wrapper around socket-like objects that handles non-blocking reads
+and writes, a simple chunking protocol, etc.
+
+`MachineState` defines the general state transition framework, but one should probably not inherit
+directly from `MachineState`. Instead, most of the time a state will inherit from classes like
+`TerminalState`, `CommandListState`, or `ForLoopState`. These are the three subclasses we
+use in `png2y4m\_server.py`;
 [xcenc\_server.py](https://github.com/excamera/mu/tree/master/src/lambdaize/xcenc_server.py) encodes
 a more complex state machine that makes use of several other subclasses.
+
+Immediately below I give a bit more background on each of the parent classes we use in building the
+`png2y4m_server.py` state machine; below, I discuss the state machine classes themselves.
 
 #### `TerminalState` ####
 
 `TerminalState` is simple: it's a state from which the machine never transitions. In
 `png2y4m_server.py`, we have `FinalState`, which simply overrides the `extra` attribute to make
-the string representation of the state more comprehensible.
+the string representation of the state more comprehensible in debug mode.
 
 Another important subclass of `TerminalState` is `ErrorState`. If a state machine enters this
-state, the server will abort execution.
+state, the server will report a corresponding error after execution.
 
 #### `CommandListState` ####
 
@@ -122,28 +210,28 @@ automatically decide an expected response based on the previous command (or just
 first command).
 
 If an entry in `commandlist` is a tuple, this is interpreted as `(client_response, server_command)`.
-This allows us more explicit control over the client's expected response. A special case for both
+This allows more explicit control over the client's expected response. A special case for both
 `client_response` and `server_command` is `None`. In the case of `client_response`, `None` means
 that the state machine should immediately send the command and transition to the next state.
 For `server_response`, this means that there is no command, after a response is received.
 We will see how both of these are useful later.
 
 After a `CommandListState` sends its last command, it transitions to the state whose constructor
-is supplied in the `nextState` property.
+is specified in the `nextState` property.
 
 #### `ForLoopState` ####
 
-A `ForLoopState` encodes a loop with an incrementing counter. `iterKey` is a string naming
-a dictionary key associated with the iteration counter; the counter is stored in the dictionary
-`self.info`, which is always carried from one state to the next. `iterInit` is the first value
-given to the counter, and `iterFin` is the final value. If the value in `self.info` corresponding
-to the key specified by `breakKey` is not `None`, iteration ends the next time the machine
-is in the `ForLoopState`.
+A `ForLoopState` encodes a loop with an incrementing counter. `iterKey` is a dictionary key
+associated with the iteration counter; the counter is stored in the dictionary `self.info`, which
+is always carried from one state to the next. `iterInit` is the first value given to the counter,
+and `iterFin` is the final value. If the value in `self.info` corresponding to the key specified
+by `breakKey` is not `None`, iteration ends the next time the machine reaches the `ForLoopState`.
 
 Each time the state machine enters the `ForLoopState`, it consults the loop counter and decides
 whether to transition to `loopState` (continue looping) or `exitState` (finish looping).
 
-Most of the time, the `expect` and `command` properties are both `None` for a `ForLoopState`.
+Most of the time, the `expect` and `command` properties are both `None` for a `ForLoopState`,
+i.e., the state machine transitions to the next state immediately.
 
 ### Coordinating png2y4m ###
 
@@ -154,9 +242,9 @@ In this case, our state machine is pretty simple:
 3. Run the command on the retrieved files.
 4. Upload the resulting Y4M.
 
-Because each state has to refer to the state that comes after it, the classes corresponding
-to each state need to be defined in reverse order. Let's start with `PNG2Y4MConfigState`,
-which is the first state.
+Because each state has to refer to the state that comes after it, the classes corresponding to each
+state need to be defined in reverse order in the source file. Let's start with `PNG2Y4MConfigState`,
+which is the state machine's entry point.
 
 #### `PNG2Y4MConfigState` ####
 
@@ -173,10 +261,10 @@ This state is a subclass of the `ForLoopState` that controls the number of frame
 downloaded. (Note that the constructor is overridden here because the ServerInfo object might
 be changed at run time.)
 
-If the looping is not yet finished, this state goes to `PNG2Y4MRetrieveState`, else it goes to
-`PNG2Y4MConvertAndUploadState`.
+If the looping is not yet finished, this state goes to `PNG2Y4MRetrieveAndRunState`, else it goes to
+`PNG2Y4MUploadState`.
 
-#### `PNG2Y4MRetrieveState` ####
+#### `PNG2Y4MRetrieveAndRunState` ####
 
 This is once again a `CommandListState` subclass. It sets variables that determine which S3 object
 to retrieve and the corresponding output filename, then retrieves the object. Here again we add
@@ -190,14 +278,7 @@ which makes this state wait for the client's response before transitioning back 
 Note also that we override the `nextState` property *after* `PNG2Y4MRetrieveLoopState` is defined
 to prevent use-before-define errors.
 
-#### `PNG2Y4MConvertAndUploadState` ####
+#### `PNG2Y4MUploadState` ####
 
 Another `CommandListState` that runs the png2y4m conversion command and then uploads the result,
 then transitions to the FinalState.
-
-## Putting it all together ##
-
-Now that we've installed the lambda function, we can launch the coordinating server, which will
-launch the requested number of lambda instances and coordinate their execution. Usage:
-
-    ./png2y4m_server.py <num_to_launch> <lambda_function_name> [num_frames [num_offset [video_name]]]

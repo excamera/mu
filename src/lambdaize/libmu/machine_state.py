@@ -79,7 +79,7 @@ class MachineState(SocketNB):
                 print "SERVER HANDLING", msg
 
             if msg[:4] == "FAIL":
-                return ErrorState(msg)
+                return ErrorState(self, msg)
 
             try:
                 state = state.transition(msg)

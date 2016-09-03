@@ -53,11 +53,14 @@ class SocketNB(object):
         if self.sock is None:
             return
 
-        if isinstance(self.sock, SSL.Connection):
-            self.sock.shutdown()
-        else:
-            self.sock.shutdown(socket.SHUT_RDWR)
-        self.sock.close()
+        try:
+            if isinstance(self.sock, SSL.Connection):
+                self.sock.shutdown()
+            else:
+                self.sock.shutdown(socket.SHUT_RDWR)
+            self.sock.close()
+        except:
+            pass
 
         self.sock = None
 

@@ -2,7 +2,6 @@
 
 import sys
 
-import pylaunch
 from libmu import server, TerminalState, CommandListState, OnePassState, IfElseState, SuperpositionState, InfoWatcherState, ForLoopState
 
 class ServerInfo(object):
