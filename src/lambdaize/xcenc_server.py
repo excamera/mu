@@ -6,8 +6,10 @@ from libmu import server, TerminalState, CommandListState, OnePassState, IfElseS
 
 class ServerInfo(object):
     states = []
+    port_number = 13579
 
     video_name = "sintel-1k-y4m_06"
+    num_offset = 0
     num_parts = 1
     num_passes = 4
     lambda_function = "xcenc"
@@ -118,9 +120,9 @@ class XCEncSettingsState(CommandListState):
     def __init__(self, prevState, aNum=0):
         super(XCEncSettingsState, self).__init__(prevState, aNum)
         # set up commands
-        aNum = self.actorNum
+        pNum = self.actorNum + ServerInfo.num_offset
         vName = ServerInfo.video_name
-        self.commands = [ s.format(vName, "%08d" % aNum) if s is not None else None for s in self.commands ]
+        self.commands = [ s.format(vName, "%08d" % pNum) if s is not None else None for s in self.commands ]
 
 class XCEncSetNeighborConnectState(OnePassState):
     extra = "(waiting for lsnport to report to neighbor)"
@@ -163,7 +165,7 @@ def main():
 
     # launch the lambdas
     event = { "mode": 2
-            , "port": 13579
+            , "port": ServerInfo.port_number
             , "addr": None  # server_launch will fill this in for us
             , "nonblock": 1
             , "cacert": ServerInfo.cacert

@@ -75,7 +75,7 @@ def server_main_loop(states, constructor, server_info, chainfile=None, keyfile=N
     # bro, you listening to this?
     lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     lsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    lsock.bind(('0.0.0.0', 13579))
+    lsock.bind(('0.0.0.0', server_info.port_number))
     lsock.listen(server_info.num_parts + 10) # lol like the kernel listens to me
 
     sslctx = SSL.Context(SSL.TLSv1_2_METHOD)
@@ -122,6 +122,15 @@ def server_main_loop(states, constructor, server_info, chainfile=None, keyfile=N
     rwflags = []
     poll_obj = select.poll()
     poll_obj.register(lsock_fd, select.POLLIN)
+    npasses_out = 0
+
+    def show_status():
+        actStates = len([ v for v in rwflags if v != 0 ])
+        errStates = len([ 1 for s in states if isinstance(s, libmu.machine_state.ErrorState) ])
+        doneStates = len([ 1 for s in states if isinstance(s, libmu.machine_state.TerminalState) ]) - errStates
+        waitStates = server_info.num_parts - len(states)
+        print "SERVER status: active=%d, done=%d, prelaunch=%d, error=%d" % (actStates, doneStates, waitStates, errStates)
+
     while True:
         dflags = rwsplit(states, rwflags)
 
@@ -138,7 +147,17 @@ def server_main_loop(states, constructor, server_info, chainfile=None, keyfile=N
             poll_obj.unregister(lsock_fd)
             lsock_fd = None
 
-        pfds = poll_obj.poll(1000 * libmu.defs.Defs.timeout)
+        if npasses_out == 100:
+            npasses_out = 0
+            show_status()
+
+        pfds = poll_obj.poll(1000)
+        if len(pfds) == 0:
+            if npasses_out != 0:
+                show_status()
+            pfds = poll_obj.poll(1000 * libmu.defs.Defs.timeout)
+
+        npasses_out += 1
 
         if len(pfds) == 0:
             # len(rfds) == 0 and len(wfds) == 0:
@@ -179,7 +198,7 @@ def server_main_loop(states, constructor, server_info, chainfile=None, keyfile=N
 
     for (state, num) in zip(states, range(0, len(states))):
         state.close()
-        if isinstance(state, libmu.machine_state.ErrorState):
+        if isinstance(state, libmu.machine_state.ErrorState) or not isinstance(state, libmu.machine_state.TerminalState):
             error.append(num)
             errvals.append(repr(state))
         elif fo is not None:
@@ -220,16 +239,23 @@ def usage(defaults):
     print "  -O oFile:      state machine times output file                 (%s)" % oFileStr
     print "  -P pFile:      profiling data output file                      (%s)" % pFileStr
     print
+    if hasattr(defaults, 'num_list'):
+        print "  -N a,b,c,...   run clients numbered exactly a, b, c, ...       (None)"
     print "  -n nParts:     launch nParts lambdas                           (%d)" % defaults.num_parts
-    print "  -f nFrames:    number of frames to process in each chunk       (%d)" % defaults.num_frames
+    if hasattr(defaults, 'num_frames'):
+        print "  -f nFrames:    number of frames to process in each chunk       (%d)" % defaults.num_frames
     print "  -o nOffset:    skip this many input chunks when processing     (%d)" % defaults.num_offset
     if hasattr(defaults, 'num_passes'):
         print "  -p nPasses:    number of xcenc passes                          (%d)" % defaults.num_passes
+    if hasattr(defaults, 'quality_run'):
+        print "  -q qRun:       use quality values in run #qRun                 (%d)" % defaults.quality_run
     print
     print "  -v vidName:    video name                                      ('%s')" % defaults.video_name
     print "  -b bucket:     S3 bucket in which videos are stored            ('%s')" % defaults.bucket
     if hasattr(defaults, 'in_format'):
         print "  -i inFormat:   input format ('png16', 'y4m_06', etc)           ('%s')" % defaults.in_format
+    print
+    print "  -t portNum:    listen on portNum                               (%d)" % defaults.port_number
     print
     print "  -l fnName:     lambda function name                            ('%s')" % defaults.lambda_function
     print "  -r r1,r2,...:  comma-separated list of regions                 ('%s')" % ','.join(defaults.regions)
@@ -243,7 +269,7 @@ def options(server_info):
     defaults = server_info()
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "o:f:n:v:l:r:Dc:s:k:i:b:hO:P:p:")
+        opts, args = getopt.getopt(sys.argv[1:], "o:f:n:v:l:r:Dc:s:k:i:b:hO:P:p:N:t:q:")
     except getopt.GetoptError as err:
         print str(err)
         usage(defaults)
@@ -261,10 +287,14 @@ def options(server_info):
 
     for (opt, arg) in opts:
         if opt == "-o":
+            if hasattr(server_info, 'num_list'):
+                assert server_info.num_list is None, "You cannot specify both -N and -o!!!"
             server_info.num_offset = int(arg)
         elif opt == "-f":
             server_info.num_frames = int(arg)
         elif opt == "-n":
+            if hasattr(server_info, 'num_list'):
+                assert server_info.num_list is None, "You cannot specify both -N and -n!!!"
             server_info.num_parts = int(arg)
         elif opt == "-v":
             server_info.video_name = arg
@@ -293,6 +323,17 @@ def options(server_info):
             server_info.profiling = arg
         elif opt == "-p":
             server_info.num_passes = int(arg)
+        elif opt == "-N":
+            vals = arg.replace(' ', '').split(',')
+            server_info.num_list = []
+            for val in vals:
+                if len(val) > 0:
+                    server_info.num_list.append(int(val))
+            server_info.num_parts = len(server_info.num_list)
+        elif opt == "-t":
+            server_info.port_number = int(arg)
+        elif opt == "-q":
+            server_info.quality_run = int(arg)
         else:
             assert False, "logic error: got unexpected option %s from getopt" % opt
 

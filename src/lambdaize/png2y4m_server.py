@@ -5,6 +5,8 @@ import os
 from libmu import server, TerminalState, CommandListState, ForLoopState
 
 class ServerInfo(object):
+    port_number = 13579
+
     video_name = "sintel-1k"
     num_frames = 6
     num_offset = 0
@@ -91,7 +93,7 @@ def main():
 
     # launch the lambdas
     event = { "mode": 1
-            , "port": 13579
+            , "port": ServerInfo.port_number
             , "addr": None  # server_launch will fill this in for us
             , "nonblock": 0
             , "cacert": ServerInfo.cacert

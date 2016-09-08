@@ -36,8 +36,10 @@ class SocketNB(object):
             self.ssl_write = None
             self.handshaking = False
 
+        self._fileno = sock.fileno()
+
     def fileno(self):
-        return self.sock.fileno()
+        return self._fileno
 
     def getsockname(self):
         return self.getsockname()

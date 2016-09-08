@@ -5,8 +5,11 @@ import os
 from libmu import server, TerminalState, CommandListState
 
 class ServerInfo(object):
+    port_number = 13579
+
     video_name = "sintel-1k-y4m_06"
     num_parts = 1
+    num_offset = 0
     lambda_function = "vpxenc"
     regions = ["us-east-1"]
     bucket = "excamera-us-east-1"
@@ -42,6 +45,7 @@ class VPXEncStateMachine(CommandListState):
 
     def __init__(self, prevState, aNum):
         super(VPXEncStateMachine, self).__init__(prevState, aNum)
+        aNum = self.actorNum + ServerInfo.num_offset
         vName = ServerInfo.video_name
         self.commands = [ s.format(vName, "%08d" % aNum) if s is not None else None for s in self.commands ]
 
@@ -53,7 +57,7 @@ def main():
 
     # launch the lambdas
     event = { "mode": 1
-            , "port": 13579
+            , "port": ServerInfo.port_number
             , "addr": None  # server_launch will fill this in for us
             , "nonblock": 0
             , "cacert": ServerInfo.cacert
