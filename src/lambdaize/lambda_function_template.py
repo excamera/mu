@@ -13,16 +13,7 @@ from OpenSSL import SSL
 from libmu import SocketNB, Defs, util, handler
 
 ###
-#  accept new connection from listening socket
-###
-def accept_new_connection(vals):
-    if vals.get('prvsock') is not None and vals.get('prvsock').sock is not None:
-        util.accept_socket(vals['lsnsock']).close()
-    else:
-        vals['prvsock'] = util.accept_socket(vals['lsnsock'])
-
-###
-#  send state file to nxtsock
+#  send state file to stsock
 ###
 def finished_run(msg, vals):
     # didn't run xc-enc, so nothing to do
@@ -37,20 +28,20 @@ def finished_run(msg, vals):
     shutil.copy(vals['_tmpdir'] + "/output.ivf", vals['_tmpdir'] + "/prev.ivf")
 
     # if we don't have a next neighbor, we're done
-    if vals.get('nxtsock') is None:
+    if not vals.get('send_statefile') or vals.get('stsock') is None:
         return
 
     # send output state to next worker
     with open(vals['_tmpdir'] + "/final.state", 'r') as f:
         indata = ("STATE(%d):" % vals['run_iter']) + base64.b64encode(zlib.compress(f.read()))
 
-    vals['nxtsock'].enqueue(indata)
+    vals['stsock'].enqueue(indata)
 
 ###
-#  get state file from prvsock
+#  get state file from stsock
 ###
 def get_input_state(vals):
-    indata = vals['prvsock'].dequeue()
+    indata = vals['stsock'].dequeue()
     (msg, data) = indata.split(':', 1)
 
     if Defs.debug:
@@ -72,7 +63,7 @@ def get_input_state(vals):
 ###
 def get_arwsocks(vals):
     # asocks is all extant sockets
-    socknames = ['cmdsock', 'lsnsock', 'prvsock', 'nxtsock']
+    socknames = ['cmdsock', 'stsock']
     asocks = [ s for s in [ vals.get(n) for n in socknames ] if s is not None ] + \
              [ info[1] for info in vals.setdefault('runinfo', []) ]
 
@@ -190,6 +181,7 @@ def lambda_handler(event, _):
     srvcrt = event.get('srvcrt')
     nonblock = int(event.get('nonblock', 0))
     expect_statefile = int(event.get('expect_statefile', 0))
+    send_statefile = int(event.get('send_statefile', 0))
     rm_tmpdir = int(event.get('rm_tmpdir', 1))
 
     vals = { 'bucket': bucket
@@ -200,6 +192,7 @@ def lambda_handler(event, _):
            , 'srvcrt': srvcrt
            , 'nonblock': nonblock
            , 'expect_statefile': expect_statefile
+           , 'send_statefile': send_statefile
            , 'rm_tmpdir': rm_tmpdir
            , 'run_iter': 0
            , '_tmpdir': tempfile.mkdtemp(prefix="lambda_", dir="/tmp")
@@ -213,12 +206,7 @@ def lambda_handler(event, _):
     if not isinstance(s, SocketNB):
         return str(s)
     vals['cmdsock'] = s
-
-    # in mode 2, we open a listening socket and report the port number to the cmdsock
-    if mode == 2:
-        handler.do_listen('', vals)
-    else:
-        vals['cmdsock'].enqueue('OK:HELLO')
+    vals['cmdsock'].enqueue('OK:HELLO')
 
     while True:
         (_, rsocks, wsocks) = get_arwsocks(vals)
@@ -235,10 +223,6 @@ def lambda_handler(event, _):
 
         # do all the reads we can
         for r in rfds:
-            if vals.get('lsnsock') is not None and r.fileno() == vals['lsnsock'].fileno():
-                accept_new_connection(vals)
-                continue
-
             r.do_read()
 
         # launch any writes we can
@@ -280,7 +264,7 @@ def lambda_handler(event, _):
                 if outmsg[:12] == "OK:RETVAL(0)":
                     finished_run(outmsg, vals)
 
-        if vals.get('prvsock') is not None and vals['prvsock'].want_handle:
+        if vals.get('stsock') is not None and vals['stsock'].want_handle:
             # handle receiving new state file from previous lambda
             get_input_state(vals)
 

@@ -189,66 +189,16 @@ def do_run(msg, vals):
     return _background(ret_helper, vals, 'OK:RUNNING(%s)' % cmdstring)
 
 ###
-#  listen for peer lambda
-###
-def do_listen(_, vals):
-    if vals.get('lsnsock') is not None:
-        vals['cmdsock'].enqueue("FAIL(already listening)")
-        return False
-
-    # SSLize it if necessary
-    try:
-        cacert = vals.get('cacert')
-        srvcrt = vals.get('srvcrt')
-        srvkey = vals.get('srvkey')
-        ls = libmu.util.listen_socket('0.0.0.0', 0, cacert, srvcrt, srvkey)
-    except:
-        vals['cmdsock'].enqueue('FAIL(could not open listening socket)')
-
-    if isinstance(ls, str):
-        vals['cmdsock'].enqueue('FAIL(%s)' % str(ls))
-        return True
-
-    # record information and send back to master
-    (_, vals['lsnport']) = ls.getsockname()
-    vals['lsnsock'] = ls
-
-    vals['cmdsock'].enqueue('INFO:lsnport:%d' % vals['lsnport'])
-    vals['cmdsock'].enqueue('OK:LISTEN(%d)' % vals['lsnport'])
-
-    return False
-
-###
-#  close listening socket
-###
-def do_close_listen(_, vals):
-    ls = vals.get('lsnsock')
-    if ls is not None:
-        ls.close()
-        vals['lsnsock'] = None
-
-    ps = vals.get('prvsock')
-    if ps is not None:
-        ps.close()
-        vals['prvsock'] = None
-
-    if vals.get('lsnport') is not None:
-        del vals['lsnport']
-
-    vals['cmdsock'].enqueue("OK:CLOSE_LISTEN")
-    return False
-
-###
 #  connect to peer lambda
 ###
 def do_connect(msg, vals):
-    if vals.get('nxtsock') is not None:
+    if vals.get('stsock') is not None:
         # already connected
         vals['cmdsock'].enqueue("FAIL(already connected)")
         return False
 
     try:
-        (host, port) = msg.split(':', 1)
+        (host, port, tosend) = msg.split(':', 2)
         port = int(port)
         cs = libmu.util.connect_socket(host, port, vals.get('cacert'), vals.get('srvcrt'), vals.get('srvkey'))
     except Exception as e: # pylint: disable=broad-except
@@ -258,8 +208,10 @@ def do_connect(msg, vals):
     if not isinstance(cs, SocketNB):
         vals['cmdsock'].enqueue('FAIL(%s)' % str(cs))
         return True
-    vals['nxtsock'] = cs
+    vals['stsock'] = cs
 
+    if len(tosend) > 0:
+        vals['stsock'].enqueue(tosend)
     vals['cmdsock'].enqueue('OK:CONNECT(%s)' % msg)
     return False
 
@@ -267,10 +219,10 @@ def do_connect(msg, vals):
 #  close connection to peer lambda
 ###
 def do_close_connect(_, vals):
-    ns = vals.get('nxtsock')
+    ns = vals.get('stsock')
     if ns is not None:
         ns.close()
-        vals['nxtsock'] = None
+        vals['stsock'] = None
 
     vals['cmdsock'].enqueue('OK:CLOSE_CONNECT')
     return False
@@ -288,8 +240,6 @@ message_types = { 'set:': do_set
                 , 'echo:': do_echo
                 , 'quit:': do_quit
                 , 'run:': do_run
-                , 'listen:': do_listen
-                , 'close_listen:': do_close_listen
                 , 'connect:': do_connect
                 , 'close_connect:': do_close_connect
                 }

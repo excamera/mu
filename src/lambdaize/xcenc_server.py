@@ -2,11 +2,14 @@
 
 import os
 
-from libmu import server, TerminalState, CommandListState, OnePassState, IfElseState, SuperpositionState, InfoWatcherState, ForLoopState
+from libmu import util, server, TerminalState, CommandListState, OnePassState, IfElseState, SuperpositionState, InfoWatcherState, ForLoopState
 
 class ServerInfo(object):
     states = []
     port_number = 13579
+
+    state_port_host = '127.0.0.1'
+    state_port_number = 13337
 
     quality_s = 127
     quality_y = 30
@@ -24,6 +27,8 @@ class ServerInfo(object):
     cacert = None
     srvcrt = None
     srvkey = None
+
+    client_uniq = None
 
 class FinalState(TerminalState):
     extra = "(finished)"
@@ -68,100 +73,39 @@ class XCEncLoopState(ForLoopState):
 # need to do this here to avoid use-before-def
 XCEncRunState.nextState = XCEncLoopState
 
-class XCEncMaybeDoConnect(CommandListState):
-    extra = "(connecting to neighbor)"
-    commandlist = [ (None, None)
-                  , ("OK:CONNECT", None)
-                  ]
-
-    def __init__(self, prevState, aNum=0):
-        super(XCEncMaybeDoConnect, self).__init__(prevState, aNum)
-        # fill in correct command
-        if self.info['do_fwconn']:
-            self.commands[0] = "connect:%s:%d" % self.info['connecthost']
-        else:
-            del self.commands[1]
-            del self.expects[1]
-
-class XCEncWaitForConnectHost(InfoWatcherState):
-    extra = "(waiting for neighbor to be ready to accept a connection)"
-    nextState = XCEncMaybeDoConnect
-
-    def info_updated(self):
-        if self.info.get('connecthost') is not None:
-            self.kick()
-
-class XCEncStartConnect(IfElseState):
-    extra = "(checking whether neighbor is ready to accept a connection)"
-    consequentState = XCEncMaybeDoConnect
-    alternativeState = XCEncWaitForConnectHost
-
-    def testfn(self):
-        return (not self.info['do_fwconn']) or (self.info.get('connecthost') is not None)
-
-class XCEncFinishRetrieve(CommandListState):
-    extra = "(waiting for retrieval confirmation)"
-    commandlist = [ ("OK:RETRIEVING", None)
-                  , ("OK:RETRIEVE(", None)
-                  ]
-
-class XCSetupConnect(SuperpositionState):
-    nextState = XCEncLoopState
-    state_constructors = [XCEncFinishRetrieve, XCEncStartConnect]
-
 class XCEncSettingsState(CommandListState):
     extra = "(preparing worker)"
     #pipelined = True
-    nextState = XCSetupConnect
-    commandlist = [ "set:inkey:{0}/{1}.y4m"
+    nextState = XCEncLoopState
+    commandlist = [ ("OK:HELLO", "set:inkey:{0}/{1}.y4m")
                   , "set:targfile:##TMPDIR##/input.y4m"
                   , "set:fromfile:##TMPDIR##/output.ivf"
                   , "set:cmdquality:--y-ac-qi {2}"
                   , "set:outkey:{0}/out/{1}.ivf"
+                  , "seti:expect_statefile:{5}"
+                  , "seti:send_statefile:{6}"
+                  , "connect:127.0.0.1:13337:HELLO_STATE:{3}:{1}:{4}"
                   , "retrieve:"
+                  , ("OK:RETRIEVING", None)
+                  , ("OK:RETRIEVE(", None)
                   ]
 
     def __init__(self, prevState, aNum=0):
         super(XCEncSettingsState, self).__init__(prevState, aNum)
         pNum = self.actorNum + ServerInfo.num_offset
+        nNum = pNum + 1
+        pStr = "%08d" % pNum
         vName = ServerInfo.video_name
-        self.commands = [ s.format(vName, "%08d" % pNum, ServerInfo.quality_y) if s is not None else None for s in self.commands ]
-
-class XCEncSetNeighborConnectState(OnePassState):
-    extra = "(waiting for lsnport to report to neighbor)"
-    expect = "OK:LISTEN"
-    nextState = XCEncSettingsState
-
-    def __init__(self, prevState, aNum):
-        super(XCEncSetNeighborConnectState, self).__init__(prevState, aNum)
-
-        # store these for later
-        self.info['do_fwconn'] = aNum != (ServerInfo.num_parts - 1)
-
-        # all except actor #0 should expect a statefile from its neighbor
-        if aNum is not 0:
-            self.command = "seti:expect_statefile:1"
-        else:
-            # actor #0 doesn't need to listen at all
-            self.command = "close_listen:"
-
-    def post_transition(self):
-        lsnport = int(self.info.get('lsnport'))
-        if lsnport is None:
-            raise Exception("Error: got OK:LISTEN but no corresponding INFO for lsnport")
-
-        if self.actorNum is not 0:
-            (lsnip, _) = self.sock.getpeername()
-            neighbor = self.actorNum - 1
-            ServerInfo.states[neighbor].info['connecthost'] = (lsnip, lsnport)
-
-            # let the neighbor know that its info has been updated
-            ServerInfo.states[neighbor].info_updated()
-
-        return self.nextState(self)
+        qual = ServerInfo.quality_y
+        if ServerInfo.client_uniq is None:
+            ServerInfo.client_uniq = util.rand_str(16)
+        rStr = ServerInfo.client_uniq
+        expS = 1 if self.actorNum != 0 else 0
+        sndS = 1 if self.actorNum != ServerInfo.num_parts - 1 else 0
+        self.commands = [ s.format(vName, pStr, qual, rStr, nNum, expS, sndS) if s is not None else None for s in self.commands ]
 
 def run():
-    server.server_main_loop(ServerInfo.states, XCEncSetNeighborConnectState, ServerInfo)
+    server.server_main_loop(ServerInfo.states, XCEncSettingsState, ServerInfo)
 
 def main():
     server.options(ServerInfo)
