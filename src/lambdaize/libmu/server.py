@@ -8,8 +8,6 @@ import select
 import socket
 import sys
 
-from OpenSSL import SSL
-
 import pylaunch
 import libmu.defs
 import libmu.machine_state
@@ -66,47 +64,19 @@ def server_launch(server_info, event, akid, secret):
 ###
 #  set up server listen sock
 ###
-def setup_server_listen(server_info, chainfile=None, keyfile=None):
-    # bro, you listening to this?
-    lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    lsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    lsock.bind(('0.0.0.0', server_info.port_number))
-    lsock.listen(server_info.num_parts + 10) # lol like the kernel listens to me
-
-    sslctx = SSL.Context(SSL.TLSv1_2_METHOD)
-    sslctx.set_verify_depth(9)
-    sslctx.set_options(SSL.OP_NO_COMPRESSION)
-    sslctx.set_cipher_list(libmu.defs.Defs.cipher_list)
-    sslctx.set_verify(SSL.VERIFY_NONE, lambda *_: True)
-
-    # set up server key
-    if chainfile is not None and keyfile is not None:
-        sslctx.use_certificate_chain_file(chainfile)
-        sslctx.use_privatekey_file(keyfile)
-    elif server_info.srvcrtfile is not None and server_info.srvkeyfile is not None:
-        sslctx.use_certificate_chain_file(server_info.srvcrtfile)
-        sslctx.use_privatekey_file(server_info.srvkeyfile)
-    else:
-        raise Exception("ERROR: you must supply a server cert and key!")
-    sslctx.check_privatekey()
-
-    # set up server SSL connection
-    lsock = SSL.Connection(sslctx, lsock)
-    lsock.set_accept_state()
-    lsock.setblocking(False)
-
-    return lsock
+def setup_server_listen(server_info):
+    return libmu.util.listen_socket('0.0.0.0', server_info.port_number, server_info.cacert, server_info.srvcrt, server_info.srvkey, server_info.num_parts + 10)
 
 ###
 #  server mainloop
 ###
-def server_main_loop(states, constructor, server_info, chainfile=None, keyfile=None):
+def server_main_loop(states, constructor, server_info):
     # handle profiling if specified
     if server_info.profiling:
         pr = cProfile.Profile()
         pr.enable()
 
-    lsock = setup_server_listen(server_info, chainfile, keyfile)
+    lsock = setup_server_listen(server_info)
     lsock_fd = lsock.fileno()
 
     def rwsplit(sts, ret):
@@ -294,9 +264,9 @@ def options(server_info):
         usage(defaults)
         sys.exit(1)
 
-    server_info.cacertfile = os.environ.get('CA_CERT')
-    server_info.srvcrtfile = os.environ.get('SRV_CERT')
-    server_info.srvkeyfile = os.environ.get('SRV_KEY')
+    cacertfile = os.environ.get('CA_CERT')
+    srvcrtfile = os.environ.get('SRV_CERT')
+    srvkeyfile = os.environ.get('SRV_KEY')
 
     for (opt, arg) in opts:
         if opt == "-o":
@@ -318,11 +288,11 @@ def options(server_info):
         elif opt == "-D":
             libmu.defs.Defs.debug = True
         elif opt == "-c":
-            server_info.cacertfile = arg
+            cacertfile = arg
         elif opt == "-s":
-            server_info.srvcrtfile = arg
+            srvcrtfile = arg
         elif opt == "-k":
-            server_info.srvkeyfile = arg
+            srvkeyfile = arg
         elif opt == "-b":
             server_info.bucket = arg
         elif opt == "-i":
@@ -366,7 +336,10 @@ def options(server_info):
         usage(defaults)
         sys.exit(1)
 
-    for f in [server_info.cacertfile, server_info.srvcrtfile, server_info.srvkeyfile]:
+    read_pem_files(server_info, [cacertfile, srvcrtfile, srvkeyfile])
+
+def read_pem_files(server_info, pem_files):
+    for f in pem_files:
         try:
             os.stat(str(f))
         except:
@@ -375,6 +348,6 @@ def options(server_info):
             usage(defaults)
             sys.exit(1)
 
-    server_info.cacert = libmu.util.read_pem(server_info.cacertfile)
-    server_info.srvcrt = libmu.util.read_pem(server_info.srvcrtfile)
-    server_info.srvkey = libmu.util.read_pem(server_info.srvkeyfile)
+    server_info.cacert = libmu.util.read_pem(pem_files[0])
+    server_info.srvcrt = libmu.util.read_pem(pem_files[1])
+    server_info.srvkey = libmu.util.read_pem(pem_files[2])

@@ -18,10 +18,6 @@ class ServerInfo(object):
     out_file = None
     profiling = None
 
-    cacertfile = None
-    srvcrtfile = None
-    srvkeyfile = None
-
     cacert = None
     srvcrt = None
     srvkey = None
@@ -85,8 +81,8 @@ class PNG2Y4MConfigState(CommandListState):
         outNumber = self.actorNum + ServerInfo.num_offset
         self.commands = [ s.format(outName, "%08d" % outNumber) if s is not None else None for s in self.commands ]
 
-def run(chainfile=None, keyfile=None):
-    server.server_main_loop([], PNG2Y4MConfigState, ServerInfo, chainfile, keyfile)
+def run():
+    server.server_main_loop([], PNG2Y4MConfigState, ServerInfo)
 
 def main():
     server.options(ServerInfo)

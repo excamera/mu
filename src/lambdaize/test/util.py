@@ -60,13 +60,14 @@ def run_lambda_function_template(event):
     print "Client exiting."
     sys.exit(0)
 
-def run_enc_server(server_run):
+def run_enc_server(server_obj):
     print "Server starting."
 
     try:
-        chainfile = os.path.abspath(os.path.join(sys.path[0], "data/server_chain.pem"))
-        keyfile = os.path.abspath(os.path.join(sys.path[0], "data/server_key.pem"))
-        server_run(chainfile, keyfile)
+        server_obj.ServerInfo.cacert = Td.cacert
+        server_obj.ServerInfo.srvcrt = Td.srvcrt
+        server_obj.ServerInfo.srvkey = Td.srvkey
+        server_obj.run()
 
     except:
         print "Server exception:\n%s" % traceback.format_exc()
@@ -127,7 +128,7 @@ def run_one_test(test_server, cmdstring, use_ssl, run_nonblock, *args, **kwargs)
 
         server_finish_check_retval(pid)
 
-def run_encsrv_test((cmdstring, mode, server_run)):
+def run_encsrv_test((cmdstring, mode, server_obj)):
     lambda_function_template.cmdstring = cmdstring
     libmu.Defs.debug = True
     pid = os.fork()
@@ -146,5 +147,5 @@ def run_encsrv_test((cmdstring, mode, server_run)):
         run_lambda_function_template(event)
 
     else:
-        run_enc_server(server_run)
+        run_enc_server(server_obj)
         server_finish_check_retval(pid)

@@ -9,8 +9,8 @@ import test.util as tutil
 import vpxenc_server
 #import xcenc_server
 
-tests = [ ("vpxenc --quiet --good -o ##OUTFILE## ##INFILE##", 1, vpxenc_server.run)
-        #, ("##INSTATEWAIT## /home/kwantam/git/github.com/alfalfa/src/frontend/xc-enc -s ##QUALITY## -i y4m ##INSTATESWITCH## -O ##TMPDIR##/final.state -o ##OUTFILE## ##INFILE##", 2, xcenc_server.run)
+tests = [ ("vpxenc --quiet --good -o ##OUTFILE## ##INFILE##", 1, vpxenc_server)
+        #, ("##INSTATEWAIT## /home/kwantam/git/github.com/alfalfa/src/frontend/xc-enc -s ##QUALITY## -i y4m ##INSTATESWITCH## -O ##TMPDIR##/final.state -o ##OUTFILE## ##INFILE##", 2, xcenc_server)
         ]
 
 def run_tests():

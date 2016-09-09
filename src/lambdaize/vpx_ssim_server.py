@@ -20,10 +20,6 @@ class ServerInfo(object):
     out_file = None
     profiling = None
 
-    cacertfile = None
-    srvcrtfile = None
-    srvkeyfile = None
-
     cacert = None
     srvcrt = None
     srvkey = None
@@ -59,7 +55,7 @@ class VPXSsimRun(CommandListState):
         if ServerInfo.num_list is None:
             pNum = ServerInfo.num_offset + self.actorNum
         else:
-            pNum = ServerInfo.num_list[self.actorNum]
+            pNum = ServerInfo.num_list[self.actorNum] # pylint: disable=unsubscriptable-object
         vName = ServerInfo.video_name
         qrun = ServerInfo.quality_run
         if self.info.get('quality_iter') is not None:
@@ -74,7 +70,7 @@ class VPXSsimLoop(ForLoopState):
     loopState = VPXSsimRun
     exitState = VPXSsimUpload
     iterKey = "quality_iter"
-    
+
     def __init__(self, prevState, aNum=0):
         super(VPXSsimLoop, self).__init__(prevState, aNum)
         self.iterFin = len(ServerInfo.quality_values[ServerInfo.quality_run])
@@ -96,9 +92,9 @@ class VPXSsimSettings(VPXSsimRun):
                   , ("OK:RETVAL(0)", "retrieve:")
                   , ("OK:RETRIEVE(", None)
                   ]
-    
-def run(chainfile=None, keyfile=None):
-    server.server_main_loop([], VPXSsimSettings, ServerInfo, chainfile, keyfile)
+
+def run():
+    server.server_main_loop([], VPXSsimSettings, ServerInfo)
 
 def main():
     server.options(ServerInfo)

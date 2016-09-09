@@ -250,8 +250,8 @@ def do_connect(msg, vals):
     try:
         (host, port) = msg.split(':', 1)
         port = int(port)
-        cs = libmu.util.connect_socket(host, port, vals.get('cacert'))
-    except Exception as e:
+        cs = libmu.util.connect_socket(host, port, vals.get('cacert'), vals.get('srvcrt'), vals.get('srvkey'))
+    except Exception as e: # pylint: disable=broad-except
         vals['cmdsock'].enqueue('FAIL(%s)' % str(e))
         return False
 

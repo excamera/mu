@@ -209,7 +209,7 @@ def lambda_handler(event, _):
     if mode == 0:
         return handler.do_run('', {'event': event})
 
-    s = util.connect_socket(addr, port, cacert)
+    s = util.connect_socket(addr, port, cacert, srvcrt, srvkey)
     if not isinstance(s, SocketNB):
         return str(s)
     vals['cmdsock'] = s

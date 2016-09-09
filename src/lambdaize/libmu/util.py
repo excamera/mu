@@ -32,7 +32,7 @@ def format_ssl_cert_chain(chain):
 ###
 #  connect a socket, maybe SSLizing
 ###
-def connect_socket(addr, port, cacert):
+def connect_socket(addr, port, cacert, srvcrt, srvkey):
     # connect to the master for orders
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -40,7 +40,7 @@ def connect_socket(addr, port, cacert):
 
     # if we have a cacert, this means we should use SSL for this connection
     if cacert is not None:
-        s = ssl_connect(s, cacert)
+        s = sslize(s, cacert, srvcrt, srvkey, True)
         if not isinstance(s, SSL.Connection):
             return "ERROR could not initialize SSL connection: %s\n" % str(s)
 
@@ -51,29 +51,49 @@ def connect_socket(addr, port, cacert):
 
     return s
 
+def ssl_context(cacert, srvcrt, srvkey):
+    # general setup: TLSv1.2, no compression, paranoid ciphers
+    sslctx = SSL.Context(SSL.TLSv1_2_METHOD)
+    sslctx.set_verify_depth(9)
+    sslctx.set_options(SSL.OP_NO_COMPRESSION)
+    sslctx.set_cipher_list(libmu.defs.Defs.cipher_list)
+    sslctx.set_verify(SSL.VERIFY_PEER | SSL.VERIFY_FAIL_IF_NO_PEER_CERT, lambda _, __, ___, ____, ok: ok)
+
+    # use CA cert provided during lambda invocation
+    fmt_cert = format_ssl_cert(cacert)
+    x509_cert = crypto.load_certificate(crypto.FILETYPE_PEM, fmt_cert)
+    sslctx.get_cert_store().add_cert(x509_cert)
+
+    # add my certificate chain
+    has_cert = False
+    for cert in srvcrt.split(' '):
+        x509_cert = crypto.load_certificate(crypto.FILETYPE_PEM, format_ssl_cert(cert))
+        if not has_cert:
+            sslctx.use_certificate(x509_cert)
+            has_cert = True
+        else:
+            sslctx.add_extra_chain_cert(x509_cert)
+
+    # private key
+    sslctx.use_privatekey(crypto.load_privatekey(crypto.FILETYPE_PEM, format_ssl_key(srvkey)))
+
+    # check that all's well
+    sslctx.check_privatekey()
+
+    return sslctx
+
 ###
 #  SSLize a connected socket, requiring a supplied cacert
 ###
-def ssl_connect(sock, cert):
+def sslize(sock, cacert, srvcrt, srvkey, is_connect):
     sslconn = None
     try:
-        # general setup: TLSv1.2, no compression, paranoid ciphers
-        sslctx = SSL.Context(SSL.TLSv1_2_METHOD)
-        sslctx.set_options(SSL.OP_NO_COMPRESSION)
-        sslctx.set_cipher_list(libmu.defs.Defs.cipher_list)
-
-        # require verification
-        # only thing that matters is that the cert chain checks out
-        sslctx.set_verify(SSL.VERIFY_PEER, lambda _, __, ___, ____, ok: ok)
-
-        # use CA cert provided during lambda invocation
-        fmt_cert = format_ssl_cert(cert)
-        x509_cert = crypto.load_certificate(crypto.FILETYPE_PEM, fmt_cert)
-        sslctx.get_cert_store().add_cert(x509_cert)
-
-        # turn the provided socket into an SSL socket
+        sslctx = ssl_context(cacert, srvcrt, srvkey)
         sslconn = SSL.Connection(sslctx, sock)
-        sslconn.set_connect_state()
+        if is_connect:
+            sslconn.set_connect_state()
+        else:
+            sslconn.set_accept_state()
     except:
         return traceback.format_exc()
     else:
@@ -89,47 +109,13 @@ def listen_socket(addr, port, cacert, srvcrt, srvkey, nlisten=1):
     ls.listen(nlisten)
 
     if cacert is not None and srvcrt is not None and srvkey is not None:
-        ls = ssl_listen(ls, srvcrt, srvkey)
+        ls = sslize(ls, cacert, srvcrt, srvkey, False)
         if not isinstance(ls, SSL.Connection):
             return "ERROR could not initialize SSL connection: %s\n" % str(ls)
 
     ls.setblocking(False)
 
     return ls
-
-###
-#  SSLize a listening socket using a supplied certificate chain and key
-###
-def ssl_listen(sock, chain, key):
-    sslconn = None
-    try:
-        sslctx = SSL.Context(SSL.TLSv1_2_METHOD)
-        sslctx.set_options(SSL.OP_NO_COMPRESSION)
-        sslctx.set_cipher_list(libmu.defs.Defs.cipher_list)
-        sslctx.set_verify(SSL.VERIFY_NONE, lambda *_: True)
-
-        # certificate chain
-        has_cert = False
-        for cert in chain.split(' '):
-            x509_cert = crypto.load_certificate(crypto.FILETYPE_PEM, format_ssl_cert(cert))
-            if not has_cert:
-                sslctx.use_certificate(x509_cert)
-                has_cert = True
-            else:
-                sslctx.add_extra_chain_cert(x509_cert)
-
-        # private key
-        sslctx.use_privatekey(crypto.load_privatekey(crypto.FILETYPE_PEM, format_ssl_key(key)))
-
-        # check that all's well
-        sslctx.check_privatekey()
-
-        sslconn = SSL.Connection(sslctx, sock)
-        sslconn.set_accept_state()
-    except:
-        return traceback.format_exc()
-    else:
-        return sslconn
 
 ###
 #  accept from a listening socket and hand back a SocketNB

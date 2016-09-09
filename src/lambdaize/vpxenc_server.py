@@ -16,10 +16,6 @@ class ServerInfo(object):
     out_file = None
     profiling = None
 
-    cacertfile = None
-    srvcrtfile = None
-    srvkeyfile = None
-
     cacert = None
     srvcrt = None
     srvkey = None
@@ -49,8 +45,8 @@ class VPXEncStateMachine(CommandListState):
         vName = ServerInfo.video_name
         self.commands = [ s.format(vName, "%08d" % aNum) if s is not None else None for s in self.commands ]
 
-def run(chainfile=None, keyfile=None):
-    server.server_main_loop([], VPXEncStateMachine, ServerInfo, chainfile, keyfile)
+def run():
+    server.server_main_loop([], VPXEncStateMachine, ServerInfo)
 
 def main():
     server.options(ServerInfo)

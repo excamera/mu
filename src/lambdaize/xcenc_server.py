@@ -21,10 +21,6 @@ class ServerInfo(object):
     out_file = None
     profiling = None
 
-    cacertfile = None
-    srvcrtfile = None
-    srvkeyfile = None
-
     cacert = None
     srvcrt = None
     srvkey = None
@@ -164,8 +160,8 @@ class XCEncSetNeighborConnectState(OnePassState):
 
         return self.nextState(self)
 
-def run(chainfile=None, keyfile=None):
-    server.server_main_loop(ServerInfo.states, XCEncSetNeighborConnectState, ServerInfo, chainfile, keyfile)
+def run():
+    server.server_main_loop(ServerInfo.states, XCEncSetNeighborConnectState, ServerInfo)
 
 def main():
     server.options(ServerInfo)
