@@ -198,70 +198,117 @@ def server_main_loop(states, constructor, server_info):
         fo.close()
 
 ###
-#  server usage message
+#  generate server usage message and optstring from ServerInfo object
 ###
-def usage(defaults):
-    oFileStr = "'%s'" % defaults.out_file if defaults.out_file is not None else "None"
-    pFileStr = "'%s'" % defaults.profiling if defaults.profiling is not None else "None"
-    print "Usage: %s [-h] [-D] [-O oFile] [-P pFile]" % sys.argv[0]
-    print "       [-n nParts] [-f nFrames] [-o nOffset]"
-    print "       [-v vidName] [-b bucket] [-i inFormat]"
-    print "       [-l fnName] [-r region1,region2,...]"
-    print "       [-c caCert] [-s srvCert] [-k srvKey]"
-    print
-    print "You must also set the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY envvars."
-    print
-    print "  switch         description                                     default"
-    print "  --             --                                              --"
-    print "  -h:            show this message"
-    print "  -D:            enable debug                                    (disabled)"
-    print "  -O oFile:      state machine times output file                 (%s)" % oFileStr
-    print "  -P pFile:      profiling data output file                      (%s)" % pFileStr
-    print
+def usage_str(defaults):
+    oStr = ""
+    uStr = "Usage: %s [args ...]\n\n" % sys.argv[0]
+
+    if hasattr(defaults, 'lambda_function'):
+        uStr += "You must also set the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY envvars.\n\n"
+
+    uStr += "  switch         description                                     default\n"
+    uStr += "  --             --                                              --\n"
+    uStr += "  -h:            show this message\n"
+    uStr += "  -D:            enable debug                                    (disabled)\n"
+
+    oStr += "hD"
+    
+    if hasattr(defaults, 'out_file'):
+        oFileStr = "'%s'" % defaults.out_file if defaults.out_file is not None else "None"
+        uStr += "  -O oFile:      state machine times output file                 (%s)\n" % oFileStr
+        oStr += "O:"
+
+    if hasattr(defaults, 'profiling'):
+        pFileStr = "'%s'" % defaults.profiling if defaults.profiling is not None else "None"
+        uStr += "  -P pFile:      profiling data output file                      (%s)\n" % pFileStr
+        oStr += "P:"
+
+    uStr += "\n  -n nParts:     launch nParts lambdas                           (%d)\n" % defaults.num_parts
+    oStr += "n:"
+
     if hasattr(defaults, 'num_list'):
-        print "  -N a,b,c,...   run clients numbered exactly a, b, c, ...       (None)"
-    print "  -n nParts:     launch nParts lambdas                           (%d)" % defaults.num_parts
+        uStr += "  -N a,b,c,...   run clients numbered exactly a, b, c, ...       (None)\n"
+        oStr += "N:"
+
     if hasattr(defaults, 'num_frames'):
-        print "  -f nFrames:    number of frames to process in each chunk       (%d)" % defaults.num_frames
-    print "  -o nOffset:    skip this many input chunks when processing     (%d)" % defaults.num_offset
+        uStr += "  -f nFrames:    number of frames to process in each chunk       (%d)\n" % defaults.num_frames
+        oStr += "f:"
+
+    if hasattr(defaults, 'num_offset'):
+        uStr += "  -o nOffset:    skip this many input chunks when processing     (%d)\n" % defaults.num_offset
+        oStr += "o:"
+
     if hasattr(defaults, 'num_passes'):
-        print "  -p nPasses:    number of xcenc passes                          (%d)" % defaults.num_passes
+        uStr +=  "  -p nPasses:    number of xcenc passes                          (%d)\n" % defaults.num_passes
+        oStr += "p:"
+
     if hasattr(defaults, 'quality_run'):
-        print "  -q qRun:       use quality values in run #qRun                 (%d)" % defaults.quality_run
+        uStr += "\n  -q qRun:       use quality values in run #qRun                 (%d)\n" % defaults.quality_run
+        oStr += "q:"
+
     if hasattr(defaults, 'quality_s'):
-        print "  -S s_ac_qi:    use s_ac_qi for S quantizer                     (%d)" % defaults.quality_s
+        uStr += "  -S s_ac_qi:    use s_ac_qi for S quantizer                     (%d)\n" % defaults.quality_s
+        oStr += "S:"
+
     if hasattr(defaults, 'quality_y'):
-        print "  -Y y_ac_qi:    use y_ac_qi for Y quantizer                     (%d)" % defaults.quality_y
-    print
-    print "  -v vidName:    video name                                      ('%s')" % defaults.video_name
-    print "  -b bucket:     S3 bucket in which videos are stored            ('%s')" % defaults.bucket
+        uStr += "  -Y y_ac_qi:    use y_ac_qi for Y quantizer                     (%d)\n" % defaults.quality_y
+        oStr += "Y:"
+
+    if hasattr(defaults, 'video_name'):
+        uStr += "\n  -v vidName:    video name                                      ('%s')\n" % defaults.video_name
+        oStr += "v:"
+
+    if hasattr(defaults, 'bucket'):
+        uStr += "  -b bucket:     S3 bucket in which videos are stored            ('%s')\n" % defaults.bucket
+        oStr += "b:"
+
     if hasattr(defaults, 'in_format'):
-        print "  -i inFormat:   input format ('png16', 'y4m_06', etc)           ('%s')" % defaults.in_format
-    print
-    print "  -t portNum:    listen on portNum                               (%d)" % defaults.port_number
-    print
-    print "  -l fnName:     lambda function name                            ('%s')" % defaults.lambda_function
-    print "  -r r1,r2,...:  comma-separated list of regions                 ('%s')" % ','.join(defaults.regions)
-    print
-    print "  -c caCert:     CA certificate file                             (None)"
-    print "  -s srvCert:    server certificate file                         (None)"
-    print "  -k srvKey:     server key file                                 (None)"
-    print "(hint: you can generate new keys with <mu>/bin/genkeys.sh)"
+        uStr += "  -i inFormat:   input format ('png16', 'y4m_06', etc)           ('%s')\n" % defaults.in_format
+        oStr += "i:"
+
+    uStr += "\n  -t portNum:    listen on portNum                               (%d)\n" % defaults.port_number
+    oStr += "t:"
+
+    if hasattr(defaults, 'state_port_host'):
+        uStr += "  -H stHostAddr: hostname or IP for nat punching host            (%s)\n" % defaults.state_port_host
+        oStr += "H:"
+
+    if hasattr(defaults, 'state_port_number'):
+        uStr += "  -T stHostPort: port number for nat punching host               (%s)\n" % defaults.state_port_number
+        oStr += "T:"
+
+    if hasattr(defaults, 'lambda_function'):
+        uStr += "  -l fnName:     lambda function name                            ('%s')\n" % defaults.lambda_function
+        oStr += "l:"
+
+    if hasattr(defaults, 'regions'):
+        uStr += "  -r r1,r2,...:  comma-separated list of regions                 ('%s')\n" % ','.join(defaults.regions)
+        oStr += "r:"
+
+    uStr += "\n  -c caCert:     CA certificate file                             (None)\n"
+    uStr += "  -s srvCert:    server certificate file                         (None)\n"
+    uStr += "  -k srvKey:     server key file                                 (None)\n"
+    uStr += "     (hint: you can generate new keys with <mu>/bin/genkeys.sh)\n"
+    uStr += "     (hint: you can use CA_CERT, SRV_CERT, SRV_KEY envvars instead)\n"
+    oStr += "c:s:k:"
+
+    return (uStr, oStr)
 
 def options(server_info):
-    defaults = server_info()
+    (uStr, oStr) = usage_str(server_info)
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "o:f:n:v:l:r:Dc:s:k:i:b:hO:P:p:N:t:q:S:Y:")
+        opts, args = getopt.getopt(sys.argv[1:], oStr)
     except getopt.GetoptError as err:
         print str(err)
-        usage(defaults)
+        print uStr
         sys.exit(1)
 
     if len(args) > 0:
         print "ERROR: Extraneous arguments '%s'" % ' '.join(args)
         print
-        usage(defaults)
+        print uStr
         sys.exit(1)
 
     cacertfile = os.environ.get('CA_CERT')
@@ -298,7 +345,7 @@ def options(server_info):
         elif opt == "-i":
             server_info.in_format = arg
         elif opt == "-h":
-            usage(defaults)
+            print uStr
             sys.exit(1)
         elif opt == "-O":
             server_info.out_file = arg
@@ -324,16 +371,16 @@ def options(server_info):
         else:
             assert False, "logic error: got unexpected option %s from getopt" % opt
 
-    if len(server_info.regions) == 0:
+    if hasattr(server_info, 'regions') and len(server_info.regions) == 0:
         print "ERROR: region list cannot be empty"
         print
-        usage(defaults)
+        print uStr
         sys.exit(1)
 
-    if os.environ.get("AWS_ACCESS_KEY_ID") is None or os.environ.get("AWS_SECRET_ACCESS_KEY") is None:
+    if hasattr(server_info, 'lambda_function') and (os.environ.get("AWS_ACCESS_KEY_ID") is None or os.environ.get("AWS_SECRET_ACCESS_KEY") is None):
         print "ERROR: You must set the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY envvars"
         print
-        usage(defaults)
+        print uStr
         sys.exit(1)
 
     for f in [cacertfile, srvcrtfile, srvkeyfile]:
@@ -342,7 +389,7 @@ def options(server_info):
         except:
             print "ERROR: Cannot open SSL cert or key file '%s'" % str(f)
             print
-            usage(defaults)
+            print uStr
             sys.exit(1)
 
     server_info.cacert = libmu.util.read_pem(cacertfile)
