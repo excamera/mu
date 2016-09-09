@@ -251,8 +251,9 @@ def do_connect(msg, vals):
         (host, port) = msg.split(':', 1)
         port = int(port)
         cs = libmu.util.connect_socket(host, port, vals.get('cacert'))
-    except:
-        vals['cmdsock'].enqueue('FAIL(could not parse command)')
+    except Exception as e:
+        vals['cmdsock'].enqueue('FAIL(%s)' % str(e))
+        return False
 
     if not isinstance(cs, SocketNB):
         vals['cmdsock'].enqueue('FAIL(%s)' % str(cs))

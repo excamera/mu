@@ -17,7 +17,8 @@ def run_tests(server_module):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] is "0":
-        xcenc_server.ServerInfo.num_parts = 2
+        xcenc_server.ServerInfo.num_parts = 3
+        xcenc_server.ServerInfo.num_passes = 4
         server = xcenc_server
 
     elif sys.argv[1] is "1":

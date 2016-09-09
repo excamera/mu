@@ -26,7 +26,7 @@ def run_tests(use_mode, use_nonblock):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] is "0":
-        lambda_function_template.cmdstring = "##INSTATEWAIT## /home/kwantam/git/github.com/alfalfa/src/frontend/xc-enc -s ##QUALITY## -i y4m ##INSTATESWITCH## -O ##TMPDIR##/final.state -o ##OUTFILE## ##INFILE##"
+        lambda_function_template.cmdstring = ""
         mode = 2
         nonblock = 1
 

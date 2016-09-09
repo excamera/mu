@@ -64,14 +64,9 @@ def server_launch(server_info, event, akid, secret):
         sys.exit(0)
 
 ###
-#  server mainloop
+#  set up server listen sock
 ###
-def server_main_loop(states, constructor, server_info, chainfile=None, keyfile=None):
-    # handle profiling if specified
-    if server_info.profiling:
-        pr = cProfile.Profile()
-        pr.enable()
-
+def setup_server_listen(server_info, chainfile=None, keyfile=None):
     # bro, you listening to this?
     lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     lsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -79,6 +74,7 @@ def server_main_loop(states, constructor, server_info, chainfile=None, keyfile=N
     lsock.listen(server_info.num_parts + 10) # lol like the kernel listens to me
 
     sslctx = SSL.Context(SSL.TLSv1_2_METHOD)
+    sslctx.set_verify_depth(9)
     sslctx.set_options(SSL.OP_NO_COMPRESSION)
     sslctx.set_cipher_list(libmu.defs.Defs.cipher_list)
     sslctx.set_verify(SSL.VERIFY_NONE, lambda *_: True)
@@ -98,6 +94,19 @@ def server_main_loop(states, constructor, server_info, chainfile=None, keyfile=N
     lsock = SSL.Connection(sslctx, lsock)
     lsock.set_accept_state()
     lsock.setblocking(False)
+
+    return lsock
+
+###
+#  server mainloop
+###
+def server_main_loop(states, constructor, server_info, chainfile=None, keyfile=None):
+    # handle profiling if specified
+    if server_info.profiling:
+        pr = cProfile.Profile()
+        pr.enable()
+
+    lsock = setup_server_listen(server_info, chainfile, keyfile)
     lsock_fd = lsock.fileno()
 
     def rwsplit(sts, ret):
@@ -167,7 +176,7 @@ def server_main_loop(states, constructor, server_info, chainfile=None, keyfile=N
         # look for readable FDs
         for (fd, ev) in pfds:
             if (ev & select.POLLIN) != 0:
-                if lsock is not None and fd == lsock.fileno():
+                if lsock is not None and fd == lsock_fd:
                     lsock = _handle_server_sock(lsock, states, statemap, server_info.num_parts, constructor)
 
                 else:
@@ -249,6 +258,10 @@ def usage(defaults):
         print "  -p nPasses:    number of xcenc passes                          (%d)" % defaults.num_passes
     if hasattr(defaults, 'quality_run'):
         print "  -q qRun:       use quality values in run #qRun                 (%d)" % defaults.quality_run
+    if hasattr(defaults, 'quality_s'):
+        print "  -S s_ac_qi:    use s_ac_qi for S quantizer                     (%d)" % defaults.quality_s
+    if hasattr(defaults, 'quality_y'):
+        print "  -Y y_ac_qi:    use y_ac_qi for Y quantizer                     (%d)" % defaults.quality_y
     print
     print "  -v vidName:    video name                                      ('%s')" % defaults.video_name
     print "  -b bucket:     S3 bucket in which videos are stored            ('%s')" % defaults.bucket
@@ -269,7 +282,7 @@ def options(server_info):
     defaults = server_info()
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "o:f:n:v:l:r:Dc:s:k:i:b:hO:P:p:N:t:q:")
+        opts, args = getopt.getopt(sys.argv[1:], "o:f:n:v:l:r:Dc:s:k:i:b:hO:P:p:N:t:q:S:Y:")
     except getopt.GetoptError as err:
         print str(err)
         usage(defaults)
@@ -334,6 +347,10 @@ def options(server_info):
             server_info.port_number = int(arg)
         elif opt == "-q":
             server_info.quality_run = int(arg)
+        elif opt == "-S":
+            server_info.quality_s = int(arg)
+        elif opt == "-Y":
+            server_info.quality_y = int(arg)
         else:
             assert False, "logic error: got unexpected option %s from getopt" % opt
 

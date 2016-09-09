@@ -8,10 +8,13 @@ class ServerInfo(object):
     states = []
     port_number = 13579
 
+    quality_s = 127
+    quality_y = 30
+
     video_name = "sintel-1k-y4m_06"
     num_offset = 0
     num_parts = 1
-    num_passes = 4
+    num_passes = 7
     lambda_function = "xcenc"
     regions = ["us-east-1"]
     bucket = "excamera-us-east-1"
@@ -39,15 +42,21 @@ class XCEncUploadState(CommandListState):
 
 class XCEncRunState(CommandListState):
     extra = "(running xc-enc)"
-    commandlist = [ (None, "seti:run_iter:")
-                  , "run:"
+    #pipelined = True
+    commandlist = [ (None, "seti:run_iter:{0}")
+                  , "run:##INSTATEWAIT## ./xc-enc ##QUALITY## -i y4m -O \"##TMPDIR##/final.state\" -o \"##TMPDIR##/output.ivf\" ##INSTATESWITCH## \"##TMPDIR##/input.y4m\" 2>&1"
                   , ("OK:RUNNING", None)
-                  , ("OK:RETVAL(0)", None)
+                  , ("OK:RETVAL(0)", "set:cmdquality:--s-ac-qi {1}")
+                  , None
                   ]
+    ### commands look like this:
+    # ${XC_ENC} --y-ac-qi ${Y_AC_QI} -i y4m -O final.state -o output.ivf                                                          input.y4m 2>&1
+    # ${XC_ENC} --s-ac-qi ${S_AC_QI} -i y4m -O final.state -o output.ivf -r -I 0.state           -p prev.ivf                      input.y4m 2>&1
+    # ${XC_ENC} --s-ac-qi ${S_AC_QI} -i y4m -O final.state -o output.ivf -r -I $(($j - 1)).state -p prev.ivf -S $(($j - 2)).state input.y4m 2>&1
 
     def __init__(self, prevState, aNum=0):
         super(XCEncRunState, self).__init__(prevState, aNum)
-        self.commands[0] = "seti:run_iter:%d" % (self.info['iter_key'])
+        self.commands = [ s.format(self.info['iter_key'], ServerInfo.quality_s) if s is not None else None for s in self.commands ]
 
 class XCEncLoopState(ForLoopState):
     extra = "(xc-enc looping)"
@@ -106,23 +115,21 @@ class XCSetupConnect(SuperpositionState):
 
 class XCEncSettingsState(CommandListState):
     extra = "(preparing worker)"
+    #pipelined = True
     nextState = XCSetupConnect
     commandlist = [ "set:inkey:{0}/{1}.y4m"
-                  , "set:targfile:##TMPDIR##/{1}.y4m"
-                  , "set:cmdinfile:##TMPDIR##/{1}.y4m"
-                  , "set:cmdoutfile:##TMPDIR##/{1}.ivf"
-                  , "set:fromfile:##TMPDIR##/{1}.ivf"
-                  , "set:cmdquality:0.9"
+                  , "set:targfile:##TMPDIR##/input.y4m"
+                  , "set:fromfile:##TMPDIR##/output.ivf"
+                  , "set:cmdquality:--y-ac-qi {2}"
                   , "set:outkey:{0}/out/{1}.ivf"
                   , "retrieve:"
                   ]
 
     def __init__(self, prevState, aNum=0):
         super(XCEncSettingsState, self).__init__(prevState, aNum)
-        # set up commands
         pNum = self.actorNum + ServerInfo.num_offset
         vName = ServerInfo.video_name
-        self.commands = [ s.format(vName, "%08d" % pNum) if s is not None else None for s in self.commands ]
+        self.commands = [ s.format(vName, "%08d" % pNum, ServerInfo.quality_y) if s is not None else None for s in self.commands ]
 
 class XCEncSetNeighborConnectState(OnePassState):
     extra = "(waiting for lsnport to report to neighbor)"

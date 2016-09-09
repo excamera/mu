@@ -24,7 +24,23 @@ def accept_new_connection(vals):
 ###
 #  send state file to nxtsock
 ###
-def send_output_state(vals):
+def finished_run(msg, vals):
+    # didn't run xc-enc, so nothing to do
+    if msg.find('xc-enc') == -1:
+        return
+
+    # we can delete $(($j - 2)).state now
+    if vals['run_iter'] > 1:
+        os.unlink("%s/%d.state" % (vals['_tmpdir'], vals['run_iter'] - 2))
+
+    # preserve previous encoding result
+    shutil.copy(vals['_tmpdir'] + "/output.ivf", vals['_tmpdir'] + "/prev.ivf")
+
+    # if we don't have a next neighbor, we're done
+    if vals.get('nxtsock') is None:
+        return
+
+    # send output state to next worker
     with open(vals['_tmpdir'] + "/final.state", 'r') as f:
         indata = ("STATE(%d):" % vals['run_iter']) + base64.b64encode(zlib.compress(f.read()))
 
@@ -48,6 +64,7 @@ def get_input_state(vals):
     with open(vals['_tmpdir'] + "/temp.state", 'w') as f:
         f.write(zlib.decompress(base64.b64decode(data)))
 
+    # NOTE we write to a tmpfile and rename because renaming is atomic!
     os.rename(vals['_tmpdir'] + "/temp.state", vals['_tmpdir'] + "/%d.state" % statenum)
 
 ###
@@ -115,10 +132,12 @@ def make_cmdstring(msg, vals):
         command = command.replace('##OUTFILE##', useoutfile)
 
     # statefile
-    if vals['run_iter'] != 0 and vals['expect_statefile']:
+    if vals['run_iter'] > 0 and vals['expect_statefile']:
         instatefile = "##TMPDIR##/%d.state" % (vals['run_iter'] - 1)
         instatewait = 'while [ ! -f "%s" ]; do sleep 1; done; ' % instatefile
-        instateswitch = '-I "' + instatefile + '"'
+        instateswitch = '-r -I "%s" -p "##TMPDIR##/prev.ivf"' % instatefile
+        if vals['run_iter'] > 1:
+            instateswitch += ' -S "##TMPDIR##/%d.state"' % (vals['run_iter'] - 2)
     else:
         instatewait = ""
         instateswitch = ""
@@ -126,7 +145,7 @@ def make_cmdstring(msg, vals):
     command = command.replace("##INSTATESWITCH##", instateswitch)
 
     # local tempdir
-    # NOTE this replacement must come after infile and outfile because they may refer to ##TMPDIR##
+    # NOTE this replacement must come last because other replacements might refer to ##TMPDIR##
     command = command.replace("##TMPDIR##", vals['_tmpdir'])
 
     if Defs.debug:
@@ -258,8 +277,8 @@ def lambda_handler(event, _):
 
                 vals['cmdsock'].enqueue(outmsg)
 
-                if outmsg[:12] == "OK:RETVAL(0)" and vals.get('nxtsock') is not None:
-                    send_output_state(vals)
+                if outmsg[:12] == "OK:RETVAL(0)":
+                    finished_run(outmsg, vals)
 
         if vals.get('prvsock') is not None and vals['prvsock'].want_handle:
             # handle receiving new state file from previous lambda
