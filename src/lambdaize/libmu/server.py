@@ -336,10 +336,7 @@ def options(server_info):
         usage(defaults)
         sys.exit(1)
 
-    read_pem_files(server_info, [cacertfile, srvcrtfile, srvkeyfile])
-
-def read_pem_files(server_info, pem_files):
-    for f in pem_files:
+    for f in [cacertfile, srvcrtfile, srvkeyfile]:
         try:
             os.stat(str(f))
         except:
@@ -348,6 +345,6 @@ def read_pem_files(server_info, pem_files):
             usage(defaults)
             sys.exit(1)
 
-    server_info.cacert = libmu.util.read_pem(pem_files[0])
-    server_info.srvcrt = libmu.util.read_pem(pem_files[1])
-    server_info.srvkey = libmu.util.read_pem(pem_files[2])
+    server_info.cacert = libmu.util.read_pem(cacertfile)
+    server_info.srvcrt = libmu.util.read_pem(srvcrtfile)
+    server_info.srvkey = libmu.util.read_pem(srvkeyfile)
