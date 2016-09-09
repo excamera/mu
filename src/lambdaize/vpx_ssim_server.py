@@ -42,6 +42,7 @@ class VPXSsimUpload(CommandListState):
 
 class VPXSsimRun(CommandListState):
     extra = "(running encoder and analyzing output)"
+    pipelined = True
     commandlist = [ (None, "set:cmdquality:{2}")
                   #, ("OK:SET", "run:./vpxenc -y --codec=vp8 --ivf --min-q=##QUALITY## --max-q=##QUALITY## -o ##OUTFILE##_##QUALITY## ##INFILE##")
                   , ("OK:SET", "run:./xc-enc --y-ac-qi ##QUALITY## -o ##OUTFILE##_##QUALITY## -i y4m ##INFILE##")
@@ -82,6 +83,7 @@ VPXSsimRun.nextState = VPXSsimLoop
 
 class VPXSsimSettings(VPXSsimRun):
     extra = "(setting up worker and retrieving)"
+    pipelined = True
     nextState = VPXSsimLoop
     commandlist = [ ("OK:HELLO", "set:inkey:{0}/{1}.y4m")
                   , "set:targfile:##TMPDIR##/{1}.y4m"

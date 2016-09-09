@@ -191,12 +191,13 @@ class MultiPassState(MachineState):
 
         if self.cmdNum >= len(self.commands):
             return self.nextState(self)
-        elif self.expects[self.cmdNum] is None:
+
+        if self.expects[self.cmdNum] is None:
             self.expects[self.cmdNum] = libmu.util.rand_str(32)
             self.kick()
-        else:
-            self.timestamps.append(time.time())
-            return self
+
+        self.timestamps.append(time.time())
+        return self
 
     def kick(self):
         self.recv_queue.appendleft(self.expects[self.cmdNum])
@@ -211,15 +212,28 @@ class MultiPassState(MachineState):
 class CommandListState(MultiPassState):
     nextState = TerminalState
     commandlist = []
+    pipelined = False
 
     def __init__(self, prevState, actorNum=0):
         super(CommandListState, self).__init__(prevState, actorNum)
-        self.commands = [ cmd[1] if isinstance(cmd, tuple) else cmd for cmd in self.commandlist ]
 
         # explicit expect if given, otherwise set expect based on previous command
         self.expects = [ self.commandlist[0][0] if isinstance(self.commandlist[0], tuple) else "OK" ]
-        self.expects += [ cmd[0] if isinstance(cmd, tuple) else libmu.handler.expected_response(pc)
-                          for (cmd, pc) in zip(self.commandlist[1:], self.commands[:-1]) ]
+        self.commands = [ cmd[1] if isinstance(cmd, tuple) else cmd for cmd in self.commandlist ]
+        pre_expects = [ cmd[0] if isinstance(cmd, tuple) else libmu.handler.expected_response(pc)
+                        for (cmd, pc) in zip(self.commandlist[1:], self.commands[:-1]) ]
+
+        if self.pipelined:
+            # in pipelined mode, we send all commands at once, and wait for all responses afterward
+            self.commands = [ cmd for cmd in self.commands if cmd is not None ]
+            pre_expects = [ exp for exp in pre_expects if pre_expects is not None ]
+            self.expects += [None] * (len(self.commands) - 1) + pre_expects
+            self.commands += [None] * (len(pre_expects))
+            assert len(self.expects) == len(self.commands)
+
+        else:
+            # if we're not pipelined, then we just do command-response
+            self.expects += pre_expects
 
         if self.expects[0] is None:
             self.expects[0] = libmu.util.rand_str(32)
