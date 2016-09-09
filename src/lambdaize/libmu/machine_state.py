@@ -229,7 +229,7 @@ class CommandListState(MultiPassState):
             pre_expects = [ exp for exp in pre_expects if pre_expects is not None ]
             self.expects += [None] * (len(self.commands) - 1) + pre_expects
             self.commands += [None] * (len(pre_expects))
-            assert len(self.expects) == len(self.commands)
+            assert len(self.expects) == len(self.commands), "Could not pipeline this state. Are there no commands?"
 
         else:
             # if we're not pipelined, then we just do command-response
