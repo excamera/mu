@@ -185,12 +185,13 @@ def run():
                     state_id_map[state.partner].enqueue(state.dequeue())
 
         # handle tombstone messages
+        to_delete = []
         for tid in tombstones:
             tstones = tombstones[tid]
 
             # partner is connected! send its messages
             if state_id_map.get(tid) is not None:
-                del tombstones[tid]
+                to_delete.append(tid)
                 for (msg, _) in tstones:
                     state_id_map[tid].enqueue(msg)
 
@@ -200,6 +201,13 @@ def run():
                     now = time.time()
                     if tstones[tidx][1] - now > ServerInfo.tombstone_timeout:
                         del tstones[tidx]
+
+                if len(tstones) == 0:
+                    to_delete.append(tid)
+
+        # need to delete afterwards because we cannot modify dictionary during iteration
+        for tid in to_delete:
+            del tombstones[tid]
 
         # send ready messages on each connection that's writable
         for (fd, ev) in pfds:
