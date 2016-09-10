@@ -27,13 +27,13 @@ Now we're ready to build a lambda function:
     cd /tmp/mu_example/alfalfa/src/frontend
     MEM_SIZE=1536 TIMEOUT=300 /tmp/mu_example/mu/src/lambdaize/lambdaize.sh \
         xc-enc \
-        ''
-        ''
+        '' \
+        '' \
         comp-states
 
 Note that we're not specifying any special flags for xc-enc. This is because
 [xcenc\_server.py](https://github.com/excamera/mu/tree/master/src/lambdaize/xcenc_server.py) hard
-codes these commands.
+codes these commands. You should get a result like this:
 
     {
         "CodeSize": 13395164,
@@ -50,33 +50,34 @@ codes these commands.
         "Role": "arn:aws:iam::0123456789:role/somerole"
     }
 
-Great! On to the next step
+Great! Onward to the next step
 
 ## Running the NAT traversal server ##
 
-Because of the way Lambdas are configured, we need some help to do NAT traversal, in the form of
+Because of the way Lambdas are configured, they need some help to do NAT traversal. The solution is
 [lambda\_state\_server.py](https://github.com/excamera/mu/tree/master/src/lambdaize/lambda_state_server.py).
 
-In principle you can run this server anywhere you'd like, but it's best to run it on EC2, and
-preferably in the same region as your Lambda workers, to minimize latency. If you run on EC2,
-you don't need a particularly beefy instance: an m4.large seems like plenty. (In particular,
+In principle you can run this server anywhere you'd like, but it's best to run it on EC2---and
+preferably in the same region as your Lambda workers---to minimize latency. If you run on EC2,
+you don't need a particularly beefy instance: an m4.large seems to be plenty. (In particular,
 more cores won't really help, since lambda\_state\_server is single threaded, at least for now.)
 
-I'd recommend using the latest Debian image, and possibly dist-upgrading to Testing.  You will
-need to make sure that the [security group settings](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-network-security.html)
-you've chosen allow connections from your Lambda instances. The easiest way to do this is to allow
-connections from anywhere. (Don't worry: connections to the both the orchestration and traversal
-server require client certificates, the orchestration server provides these when invoking the
-workers.)
+I'd recommend using the [latest Debian image](https://wiki.debian.org/Cloud/AmazonEC2Image),
+and preferably upgrading to testing (in brief: `/etc/apt/sources.list`, then `apt-get update`
+and `apt-get dist-upgrade`).
+
+You will need to make sure that the [security group settings](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-network-security.html)
+you've chosen allow connections from your Lambda instances. An easy way to do this is to allow
+connections from anywhere. (Don't worry: connections to both the orchestration and traversal
+server are secured with TLS and authenticated with client certificates.)
 
 You'll also need to set up your dev environment (see the [mu top-level README](https://github.com/excamera/mu))
 and build mu on your EC2 machine.
 
-Finally, lambda\_state\_server needs an SSL certificate and key, and a CA key. If you've
-already generated one (see aforementioned README for instructions), just copy `ca_cert.pem`,
-`server_cert.pem`, and `server_key.pem` to your EC2 instance. Note that at a minimum, your
-orchestration server (below) needs the same CA cert and a server cert signed by that CA. (You
-can just use the same server cert for both servers.)
+Finally, the traversal server needs a server cert and key, and a CA cert. If you've
+already generated one as described in the top-level README, just copy `ca_cert.pem`,
+`server_cert.pem`, and `server_key.pem` to your EC2 instance. It's fine to use the same
+certs and key for your orchestration and traversal servers.
 
 Commandline options:
 
@@ -98,7 +99,7 @@ Commandline options:
          (hint: you can generate new keys with <mu>/bin/genkeys.sh)
          (hint: you can use CA_CERT, SRV_CERT, SRV_KEY envvars instead)
 
-Let's launch the orchestration server on the EC2 instance:
+Let's launch the traversal server on the EC2 instance:
 
     cd /tmp/mu_example
     ./mu/src/lambdaize/lambda_state_server.py \
@@ -110,12 +111,15 @@ Take note of your EC2 instance's public IP address; we'll need it below.
 
 ## Running the orchestration server ##
 
-Now it's time to actually launch the jobs. Note that you can do this from the same EC2 instance
-as your traversal server (but beware that the orchestration server can peg your CPU, so you might
-want to opt for an m4.xlarge instance if you're running the orchestration server there).
+Now we're ready to launch the workers using the orchestration server.
 
-As before, build mu. Remember that your orchestration server's certificate needs to be signed
-by the same CA as your traversal server! (Again: you can just use the same cert if you'd like.)
+If you'd like, you can do this from the same EC2 instance as your traversal server. Beware that
+the orchestration server can use a lot of CPU when there are many clients (sorry, efficiency
+will come later...), so you *might* want to opt for an m4.xlarge instance if you're running
+both the traversal and orchestration servers on the same box.
+
+As above, build mu. Remember that your orchestration server's certificate needs to be signed
+by the same CA as your traversal server! (Again: you can just use the same certs if you'd like.)
 
     Usage: ./xcenc_server.py [args ...]
 
