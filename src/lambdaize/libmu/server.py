@@ -91,9 +91,15 @@ def server_main_loop(states, constructor, server_info):
                 if st.ssl_write or st.want_write:
                     val = val | select.POLLOUT
 
-            if val != ret[idx]:
-                ret[idx] = val
+                if val != ret[idx]:
+                    ret[idx] = val
+                    diffs.append(idx)
+
+            else:
+                ret[idx] = 0
                 diffs.append(idx)
+                if not isinstance(st, libmu.machine_state.TerminalState):
+                    sts[idx] = libmu.machine_state.ErrorState(sts[idx], "sock closed in %s" % str(sts[idx]))
 
         return diffs
 
@@ -104,11 +110,13 @@ def server_main_loop(states, constructor, server_info):
     npasses_out = 0
 
     def show_status():
-        actStates = len([ v for v in rwflags if v != 0 ])
+        actStates = len([ 1 for v in rwflags if v != 0 ])
         errStates = len([ 1 for s in states if isinstance(s, libmu.machine_state.ErrorState) ])
         doneStates = len([ 1 for s in states if isinstance(s, libmu.machine_state.TerminalState) ]) - errStates
         waitStates = server_info.num_parts - len(states)
         print "SERVER status: active=%d, done=%d, prelaunch=%d, error=%d" % (actStates, doneStates, waitStates, errStates)
+        for s in states:
+            print "    %s" % str(s)
 
     while True:
         dflags = rwsplit(states, rwflags)
@@ -120,7 +128,10 @@ def server_main_loop(states, constructor, server_info):
             if rwflags[idx] != 0:
                 poll_obj.register(states[idx], rwflags[idx])
             else:
-                poll_obj.unregister(states[idx])
+                try:
+                    poll_obj.unregister(states[idx])
+                except:
+                    pass
 
         if lsock is None and lsock_fd is not None:
             poll_obj.unregister(lsock_fd)
@@ -130,18 +141,13 @@ def server_main_loop(states, constructor, server_info):
             npasses_out = 0
             show_status()
 
-        pfds = poll_obj.poll(1000)
-        if len(pfds) == 0:
-            if npasses_out != 0:
-                show_status()
-            pfds = poll_obj.poll(1000 * libmu.defs.Defs.timeout)
-
+        pfds = poll_obj.poll(10000)
         npasses_out += 1
 
         if len(pfds) == 0:
-            # len(rfds) == 0 and len(wfds) == 0:
-            print "SERVER TIMEOUT"
-            break
+            if npasses_out != 0:
+                show_status()
+            continue
 
         # look for readable FDs
         for (fd, ev) in pfds:
@@ -270,12 +276,12 @@ def usage_str(defaults):
     uStr += "\n  -t portNum:    listen on portNum                               (%d)\n" % defaults.port_number
     oStr += "t:"
 
-    if hasattr(defaults, 'state_port_host'):
-        uStr += "  -H stHostAddr: hostname or IP for nat punching host            (%s)\n" % defaults.state_port_host
+    if hasattr(defaults, 'state_srv_addr'):
+        uStr += "  -H stHostAddr: hostname or IP for nat punching host            (%s)\n" % defaults.state_srv_addr
         oStr += "H:"
 
-    if hasattr(defaults, 'state_port_number'):
-        uStr += "  -T stHostPort: port number for nat punching host               (%s)\n" % defaults.state_port_number
+    if hasattr(defaults, 'state_srv_port'):
+        uStr += "  -T stHostPort: port number for nat punching host               (%s)\n" % defaults.state_srv_port
         oStr += "T:"
 
     if hasattr(defaults, 'lambda_function'):
@@ -368,6 +374,10 @@ def options(server_info):
             server_info.quality_s = int(arg)
         elif opt == "-Y":
             server_info.quality_y = int(arg)
+        elif opt == "-H":
+            server_info.state_srv_addr = arg
+        elif opt == "-T":
+            server_info.state_srv_port = int(arg)
         else:
             assert False, "logic error: got unexpected option %s from getopt" % opt
 

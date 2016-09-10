@@ -5,6 +5,7 @@ import socket
 import traceback
 
 from OpenSSL import SSL, crypto
+from OpenSSL._util import lib as _ssl_lib
 
 import libmu.socket_nb
 import libmu.defs
@@ -56,6 +57,7 @@ def ssl_context(cacert, srvcrt, srvkey):
     sslctx = SSL.Context(SSL.TLSv1_2_METHOD)
     sslctx.set_verify_depth(9)
     sslctx.set_options(SSL.OP_NO_COMPRESSION)
+    sslctx.set_mode(_ssl_lib.SSL_MODE_ENABLE_PARTIAL_WRITE | _ssl_lib.SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER)
     sslctx.set_cipher_list(libmu.defs.Defs.cipher_list)
     sslctx.set_verify(SSL.VERIFY_PEER | SSL.VERIFY_FAIL_IF_NO_PEER_CERT, lambda _, __, ___, ____, ok: ok)
 

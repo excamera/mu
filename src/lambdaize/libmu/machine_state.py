@@ -55,7 +55,7 @@ class MachineState(SocketNB):
         # use list(deque) so that we can modify the deque inside the iteration
             if msg[:4] == 'INFO':
                 if Defs.debug:
-                    print "SERVER HANDLING", msg
+                    print "SERVER HANDLING (%d) %s" % (self.actorNum, msg)
                 info_updated = True
                 self.recv_queue.remove(msg)
 
@@ -76,7 +76,7 @@ class MachineState(SocketNB):
         while state.want_handle:
             msg = state.dequeue()
             if Defs.debug:
-                print "SERVER HANDLING", msg
+                print "SERVER HANDLING (%d) %s" % (self.actorNum, msg)
 
             if msg[:4] == "FAIL":
                 return ErrorState(self, msg)
@@ -85,7 +85,7 @@ class MachineState(SocketNB):
                 state = state.transition(msg)
             except ValueError:
                 if Defs.debug:
-                    print "SERVER REQUEUEING", msg
+                    print "SERVER REQUEUEING (%d) %s" % (self.actorNum, msg)
                 retries.append(msg)
 
             if Defs.debug:
@@ -283,7 +283,6 @@ class ForLoopState(OnePassState):
         return "(for loop, start:%d iter:%d end:%d)" % (self.iterInit, self.info[self.iterKey], self.iterFin)
 
 class SuperpositionState(MachineState):
-    command = None
     state_constructors = [TerminalState]
     nextState = TerminalState
 

@@ -2,6 +2,7 @@
 
 import collections
 import socket
+import traceback
 
 from OpenSSL import SSL
 
@@ -55,6 +56,9 @@ class SocketNB(object):
         if self.sock is None:
             return
 
+        if Defs.debug:
+            print "CLOSING SOCKET %s" % traceback.format_exc()
+
         try:
             if isinstance(self.sock, SSL.Connection):
                 self.sock.shutdown()
@@ -76,14 +80,13 @@ class SocketNB(object):
                     break
                 else:
                     self.recv_buf += nbuf
-            except (socket.error, OSError, SSL.WantReadError):
-                break
-            except (SSL.ZeroReturnError, SSL.SysCallError):
-                # in these cases, the socket is closed
-                self.close()
+            except SSL.WantReadError:
+                start_len = -1
                 break
             except SSL.WantWriteError:
                 self.ssl_write = True
+                break
+            except:
                 break
 
         if len(self.recv_buf) == start_len:
@@ -150,6 +153,7 @@ class SocketNB(object):
     def _send_raw(self):
         while True:
             self.ssl_write = None
+            slen = 0
             try:
                 slen = self.sock.send(self.send_buf)
             except (socket.error, OSError, SSL.ZeroReturnError, SSL.SysCallError, SSL.WantReadError):
@@ -188,5 +192,7 @@ class SocketNB(object):
             self.ssl_write = True
         except SSL.WantReadError:
             pass
+        except SSL.Error:
+            self.close()
         else:
             self.handshaking = False
