@@ -2,6 +2,7 @@
 
 import select
 import socket
+import time
 
 import libmu
 import libmu.server
@@ -14,6 +15,9 @@ class ServerInfo(object):
     cacert = None
     srvcrt = None
     srvkey = None
+
+    # number of seconds to keep tombstone messages before discarding
+    tombstone_timeout = 600
 
 class StateSocket(libmu.SocketNB):
     stateid = None
@@ -42,7 +46,7 @@ class StateSocket(libmu.SocketNB):
             return myid
 
 
-def rwsplit(sts, ret):
+def rwsplit(sts, ret, tmbs):
     diffs = {}
     for idx in sts:
         st = sts[idx]
@@ -56,9 +60,15 @@ def rwsplit(sts, ret):
                 ret[idx] = val
                 diffs[idx] = True
 
-        elif not st.want_handle:
+        else:
             ret[idx] = 0
             diffs[idx] = False
+
+            if st.want_handle:
+                plist = tmbs.setdefault(st.partner, [])
+                while st.want_handle:
+                    tombstone = (st.dequeue(), time.time())
+                    plist.append(tombstone)
 
     return diffs
 
@@ -85,6 +95,7 @@ def run():
     state_fd_map = {}
     rwflags = {}
     state_id_map = {}
+    tombstones = {}
     npasses_out = 0
     poll_obj = select.poll()
     poll_obj.register(lsock_fd, select.POLLIN)
@@ -94,10 +105,14 @@ def run():
         tstates = len(state_id_map)
         fstates = len(state_fd_map)
         rwstates = len(rwflags)
-        print "SERVER status: conn_id=%d conn_fd=%d conn_flags=%d partnerless=%d" % (tstates, fstates, rwstates, npstates)
+        tstones = len(tombstones)
+        print "SERVER status: conn_id=%d conn_fd=%d conn_flags=%d partnerless=%d tombstones=%d" % (tstates, fstates, rwstates, npstates, tstones)
+        for f in state_fd_map:
+            st = state_fd_map[f]
+            print "%d: (%s) %s" % (f, st.stateid, str(st.sock))
 
     while True:
-        dflags = rwsplit(state_id_map, rwflags)
+        dflags = rwsplit(state_id_map, rwflags, tombstones)
 
         for idx in dflags:
             if rwflags.get(idx, 0) != 0:
@@ -109,6 +124,11 @@ def run():
                     pass
 
             if not dflags[idx]:
+                if libmu.Defs.debug:
+                    print "SERVER Deleting state %s" % idx
+                assert len(state_id_map[idx].recv_queue) == 0
+                assert state_id_map[idx].sock is None
+
                 fno = state_id_map[idx].fileno()
                 state_id_map[idx].close()
                 rwflags[idx] = None
@@ -164,7 +184,24 @@ def run():
                 while state.want_handle:
                     state_id_map[state.partner].enqueue(state.dequeue())
 
-        # send ready messages on each connection
+        # handle tombstone messages
+        for tid in tombstones:
+            tstones = tombstones[tid]
+
+            # partner is connected! send its messages
+            if state_id_map.get(tid) is not None:
+                del tombstones[tid]
+                for (msg, _) in tstones:
+                    state_id_map[tid].enqueue(msg)
+
+            # every once in a while, go through all the tombstones and get rid of old ones
+            elif npasses_out == 0:
+                for tidx in reversed(range(0, len(tstones))):
+                    now = time.time()
+                    if tstones[tidx][1] - now > ServerInfo.tombstone_timeout:
+                        del tstones[tidx]
+
+        # send ready messages on each connection that's writable
         for (fd, ev) in pfds:
             if (ev & select.POLLOUT) != 0:
                 state_fd_map[fd].do_write()

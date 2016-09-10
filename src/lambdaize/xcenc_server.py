@@ -8,8 +8,8 @@ class ServerInfo(object):
     states = []
     port_number = 13579
 
-    state_port_host = '127.0.0.1'
-    state_port_number = 13337
+    state_srv_addr = '127.0.0.1'
+    state_srv_port = 13337
 
     quality_s = 127
     quality_y = 30
@@ -33,19 +33,55 @@ class ServerInfo(object):
 class FinalState(TerminalState):
     extra = "(finished)"
 
-class XCEncUploadState(CommandListState):
-    extra = "(uploading result)"
+class XCEncFinishState(CommandListState):
+    extra = "(uploading comparison data and quitting command)"
     nextState = FinalState
-    commandlist = [ (None, "upload:")
+    commandlist = [ (None, "set:fromfile:##TMPDIR##/comp.txt")
+                  , "set:outkey:{0}/comp_txt/{1}.txt"
+                  , "upload:"
                   , ("OK:UPLOADING", None)
                   , ("OK:UPLOAD(", "quit:")
                   ]
 
+    def __init__(self, prevState, aNum=0):
+        super(XCEncFinishState, self).__init__(prevState, aNum)
+        if self.actorNum > 0:
+            pStr = "%08d" % (self.actorNum + ServerInfo.num_offset)
+            vName = ServerInfo.video_name
+            self.commands = [ s.format(vName, pStr) if s is not None else None for s in self.commands ]
+        else:
+            # actor #0 has nothing to upload because it never compares
+            self.commands[0] = "quit:"
+            del self.commands[1:]
+            del self.expects[1:]
+
+
+class XCEncCompareState(CommandListState):
+    extra = "(comparing states)"
+    nextState = TerminalState
+    commandlist = [ (None, "run:test ! -f \"##TMPDIR##/prev.state\" || ./comp-states \"##TMPDIR##/prev.state\" \"##TMPDIR##/final.state\" >> \"##TMPDIR##\"/comp.txt")
+                  , ("OK:RUNNING", None)
+                  , ("OK:RETVAL(0)", None)
+                  ]
+
+class XCEncUploadState(CommandListState):
+    extra = "(uploading result)"
+    nextState = TerminalState
+    commandlist = [ (None, "upload:")
+                  , ("OK:UPLOADING", None)
+                  , ("OK:UPLOAD(", None)
+                  ]
+
+class XCEncUploadAndCompare(SuperpositionState):
+    nextState = XCEncFinishState
+    state_constructors = [XCEncUploadState, XCEncCompareState]
+
 class XCEncRunState(CommandListState):
     extra = "(running xc-enc)"
-    #pipelined = True
     commandlist = [ (None, "seti:run_iter:{0}")
-                  , "run:##INSTATEWAIT## ./xc-enc ##QUALITY## -i y4m -O \"##TMPDIR##/final.state\" -o \"##TMPDIR##/output.ivf\" ##INSTATESWITCH## \"##TMPDIR##/input.y4m\" 2>&1"
+                  , "run:test ! -f \"##TMPDIR##/final.state\" || cp \"##TMPDIR##/final.state\" \"##TMPDIR##/prev.state\""
+                  , ("OK:RUNNING", None)
+                  , ("OK:RETVAL(0)", "run:##INSTATEWAIT## ./xc-enc ##QUALITY## -i y4m -O \"##TMPDIR##/final.state\" -o \"##TMPDIR##/output.ivf\" ##INSTATESWITCH## \"##TMPDIR##/input.y4m\" 2>&1")
                   , ("OK:RUNNING", None)
                   , ("OK:RETVAL(0)", "set:cmdquality:--s-ac-qi {1}")
                   , None
@@ -53,7 +89,7 @@ class XCEncRunState(CommandListState):
     ### commands look like this:
     # ${XC_ENC} --y-ac-qi ${Y_AC_QI} -i y4m -O final.state -o output.ivf                                                          input.y4m 2>&1
     # ${XC_ENC} --s-ac-qi ${S_AC_QI} -i y4m -O final.state -o output.ivf -r -I 0.state           -p prev.ivf                      input.y4m 2>&1
-    # ${XC_ENC} --s-ac-qi ${S_AC_QI} -i y4m -O final.state -o output.ivf -r -I $(($j - 1)).state -p prev.ivf -S $(($j - 2)).state input.y4m 2>&1
+    # ${XC_ENC} --s-ac-qi ${S_AC_QI} -i y4m -O final.state -o output.ivf -r -I $(($j - 1)).state -p prev.ivf -S $(($j - 2)).state input.y4m 2>&1         repeat this one
 
     def __init__(self, prevState, aNum=0):
         super(XCEncRunState, self).__init__(prevState, aNum)
@@ -62,7 +98,7 @@ class XCEncRunState(CommandListState):
 class XCEncLoopState(ForLoopState):
     extra = "(xc-enc looping)"
     loopState = XCEncRunState
-    exitState = XCEncUploadState
+    exitState = XCEncUploadAndCompare
 
     def __init__(self, prevState, aNum=0):
         super(XCEncLoopState, self).__init__(prevState, aNum)
@@ -75,7 +111,7 @@ XCEncRunState.nextState = XCEncLoopState
 
 class XCEncSettingsState(CommandListState):
     extra = "(preparing worker)"
-    #pipelined = True
+    pipelined = True
     nextState = XCEncLoopState
     commandlist = [ ("OK:HELLO", "set:inkey:{0}/{1}.y4m")
                   , "set:targfile:##TMPDIR##/input.y4m"
@@ -84,7 +120,7 @@ class XCEncSettingsState(CommandListState):
                   , "set:outkey:{0}/out/{1}.ivf"
                   , "seti:expect_statefile:{5}"
                   , "seti:send_statefile:{6}"
-                  , "connect:127.0.0.1:13337:HELLO_STATE:{3}:{1}:{4}"
+                  , "connect:{7}:HELLO_STATE:{3}:{1}:{4}"
                   , "retrieve:"
                   , ("OK:RETRIEVING", None)
                   , ("OK:RETRIEVE(", None)
@@ -102,7 +138,8 @@ class XCEncSettingsState(CommandListState):
         rStr = ServerInfo.client_uniq
         expS = 1 if self.actorNum != 0 else 0
         sndS = 1 if self.actorNum != ServerInfo.num_parts - 1 else 0
-        self.commands = [ s.format(vName, pStr, qual, rStr, nNum, expS, sndS) if s is not None else None for s in self.commands ]
+        stateAddr = "%s:%d" % (ServerInfo.state_srv_addr, ServerInfo.state_srv_port)
+        self.commands = [ s.format(vName, pStr, qual, rStr, nNum, expS, sndS, stateAddr) if s is not None else None for s in self.commands ]
 
 def run():
     server.server_main_loop(ServerInfo.states, XCEncSettingsState, ServerInfo)
