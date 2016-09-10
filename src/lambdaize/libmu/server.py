@@ -115,8 +115,11 @@ def server_main_loop(states, constructor, server_info):
         doneStates = len([ 1 for s in states if isinstance(s, libmu.machine_state.TerminalState) ]) - errStates
         waitStates = server_info.num_parts - len(states)
         print "SERVER status: active=%d, done=%d, prelaunch=%d, error=%d" % (actStates, doneStates, waitStates, errStates)
-        for s in states:
-            print "    %s" % str(s)
+
+        # enhanced output in debugging mode
+        if libmu.defs.Defs.debug:
+            for s in states:
+                print "    %s" % str(s)
 
     while True:
         dflags = rwsplit(states, rwflags)

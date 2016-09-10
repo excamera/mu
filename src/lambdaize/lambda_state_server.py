@@ -107,9 +107,12 @@ def run():
         rwstates = len(rwflags)
         tstones = len(tombstones)
         print "SERVER status: conn_id=%d conn_fd=%d conn_flags=%d partnerless=%d tombstones=%d" % (tstates, fstates, rwstates, npstates, tstones)
-        for f in state_fd_map:
-            st = state_fd_map[f]
-            print "%d: (%s) %s" % (f, st.stateid, str(st.sock))
+
+        # enhanced output in debugging mode
+        if libmu.Defs.debug:
+            for f in state_fd_map:
+                st = state_fd_map[f]
+                print "%d: (%s) %s" % (f, st.stateid, str(st.sock))
 
     while True:
         dflags = rwsplit(state_id_map, rwflags, tombstones)
