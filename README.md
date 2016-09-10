@@ -6,6 +6,9 @@ In this example, we are going to run lambdas that grab PNG files stored on S3 as
 `mybucket:sintel-1k-png16/%08d.png`, encode them 6 frames at a time as Y4M files,
 and upload them to `mybucket:sintel-1k-y4m_06/%08d.y4m`.
 
+If you want more information on running xc-enc, see
+[src/lambdaize/README\_xc-enc.md](https://github.com/excamera/mu/tree/master/src/lambdaize/README_xc-enc.md).
+
 ## Prerequisites ##
 
 I assume that you've already got the `mybucket:sintel-1k-png16/%08d.png` files. You should
@@ -99,37 +102,34 @@ of your function, you can invoke `aws lambda list-functions`.
 Finally, we will run a server to launch and coordinate the lambda instances. The full script is in
 [mu/src/lambdaize/png2y4m\_server.py](https://github.com/excamera/mu/blob/master/src/lambdaize/png2y4m_server.py).
 
-    Usage: ./png2y4m_server.py [-h] [-D] [-O oFile] [-P pFile]
-           [-n nParts] [-f nFrames] [-o nOffset]
-           [-v vidName] [-b bucket] [-i inFormat]
-           [-l fnName] [-r region1,region2,...]
-           [-c caCert] [-s srvCert] [-k srvKey]
-    
+    Usage: ./png2y4m_server.py [args ...]
+
     You must also set the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY envvars.
-    
+
       switch         description                                     default
       --             --                                              --
       -h:            show this message
       -D:            enable debug                                    (disabled)
-      -O oFile:      state machine times output file (for postproc)  (None)
-      -P pFile:      profiling data                                  (None)
-    
+      -O oFile:      state machine times output file                 (None)
+      -P pFile:      profiling data output file                      (None)
+
       -n nParts:     launch nParts lambdas                           (1)
       -f nFrames:    number of frames to process in each chunk       (6)
       -o nOffset:    skip this many input chunks when processing     (0)
-    
+
       -v vidName:    video name                                      ('sintel-1k')
       -b bucket:     S3 bucket in which videos are stored            ('excamera-us-east-1')
-      -i inFormat:   PNG format ('png' or 'png16', probably)         ('png16')
-    Input files are 's3://<bucket>/<vidname>-<in_format>/%08d.png'
-    
+      -i inFormat:   input format ('png16', 'y4m_06', etc)           ('png16')
+
+      -t portNum:    listen on portNum                               (13579)
       -l fnName:     lambda function name                            ('png2y4m')
       -r r1,r2,...:  comma-separated list of regions                 ('us-east-1')
-    
+
       -c caCert:     CA certificate file                             (None)
       -s srvCert:    server certificate file                         (None)
       -k srvKey:     server key file                                 (None)
-    (hint: you can generate new keys with <mu>/bin/genkeys.sh)
+         (hint: you can generate new keys with <mu>/bin/genkeys.sh)
+         (hint: you can use CA_CERT, SRV_CERT, SRV_KEY envvars instead)
 
 We will need to generate SSL certs:
 
