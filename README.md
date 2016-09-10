@@ -16,10 +16,9 @@ as of September 2016).
 
 You will need the following packages:
 
-    apt-get install build-essential g++-5 automake libssl-dev \
-                    python-dev python-boto3 python-openssl \
-                    libpng-dev zlib1g-dev libtool libtool-bin \
-                    awscli
+    apt-get install build-essential g++-5 automake pkg-config \
+                    python-dev python-boto3 libssl-dev python-openssl \
+                    libpng-dev zlib1g-dev libtool libtool-bin awscli
 
 You'll also need an AWS ID, both for the
 [AWS CLI](http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html)
