@@ -5,9 +5,12 @@ import os
 from libmu import server, TerminalState, CommandListState, ForLoopState
 
 class ServerInfo(object):
-    quality_run = 0
-    #quality_values = [ [0, 8], [16, 24], [32, 40], [48, 56], [64, 72], [80, 88], [96, 104], [112, 120], [127], [63] ]
-    quality_values = [ [0], [8], [16], [24], [32], [40], [48], [56], [64], [72], [80], [88], [96], [104], [112], [120], [127], [63] ]
+    quality_values = [ 0, 8, 16 ]
+    quality_valstring = "0_8_16"
+
+    run_xcenc = False
+    vpx_cmdstring = "./vpxenc -y --codec=vp8 --ivf --min-q=##QUALITY## --max-q=##QUALITY## -o ##OUTFILE##_##QUALITY## ##INFILE##"
+    xc_cmdstring = "./xc-enc --y-ac-qi ##QUALITY## -o ##OUTFILE##_##QUALITY## -i y4m ##INFILE##"
 
     port_number = 13579
 
@@ -40,8 +43,7 @@ class VPXSsimRun(CommandListState):
     extra = "(running encoder and analyzing output)"
     pipelined = True
     commandlist = [ (None, "set:cmdquality:{2}")
-                  #, ("OK:SET", "run:./vpxenc -y --codec=vp8 --ivf --min-q=##QUALITY## --max-q=##QUALITY## -o ##OUTFILE##_##QUALITY## ##INFILE##")
-                  , ("OK:SET", "run:./xc-enc --y-ac-qi ##QUALITY## -o ##OUTFILE##_##QUALITY## -i y4m ##INFILE##")
+                  , ("OK:SET", "run:{4}")
                   , ("OK:RETVAL(0)", "run:echo QUALITY:##QUALITY## >> ##TMPDIR##/{1}.txt")
                   , ("OK:RETVAL(0)", "run:./xc-framesize ##OUTFILE##_##QUALITY## >> ##TMPDIR##/{1}.txt")
                   , ("OK:RETVAL(0)", "run:./vpxdec --codec=vp8 -o ##INFILE##_dec_##QUALITY## ##OUTFILE##_##QUALITY##")
@@ -52,18 +54,25 @@ class VPXSsimRun(CommandListState):
 
     def __init__(self, prevState, aNum=0):
         super(VPXSsimRun, self).__init__(prevState, aNum)
+        vName = ServerInfo.video_name
+        qStr = ServerInfo.quality_valstring
+
         if ServerInfo.num_list is None:
             pNum = ServerInfo.num_offset + self.actorNum
         else:
             pNum = ServerInfo.num_list[self.actorNum] # pylint: disable=unsubscriptable-object
-        vName = ServerInfo.video_name
-        qrun = ServerInfo.quality_run
+
         if self.info.get('quality_iter') is not None:
-            quality = ServerInfo.quality_values[qrun][self.info['quality_iter']]
+            quality = ServerInfo.quality_values[self.info['quality_iter']]
         else:
             quality = 0
 
-        self.commands = [ s.format(vName, "%08d" % pNum, quality, qrun) if s is not None else None for s in self.commands ]
+        if ServerInfo.run_xcenc:
+            cmdStr = ServerInfo.xc_cmdstring
+        else:
+            cmdStr = ServerInfo.vpx_cmdstring
+
+        self.commands = [ s.format(vName, "%08d" % pNum, quality, qStr, cmdStr) if s is not None else None for s in self.commands ]
 
 class VPXSsimLoop(ForLoopState):
     extra = "(looping)"
@@ -73,7 +82,7 @@ class VPXSsimLoop(ForLoopState):
 
     def __init__(self, prevState, aNum=0):
         super(VPXSsimLoop, self).__init__(prevState, aNum)
-        self.iterFin = len(ServerInfo.quality_values[ServerInfo.quality_run])
+        self.iterFin = len(ServerInfo.quality_values)
 
 VPXSsimRun.nextState = VPXSsimLoop
 

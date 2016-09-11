@@ -247,9 +247,14 @@ def usage_str(defaults):
         uStr += "  -o nOffset:    skip this many input chunks when processing     (%d)\n" % defaults.num_offset
         oStr += "o:"
 
-    if hasattr(defaults, 'quality_run'):
-        uStr += "\n  -q qRun:       use quality values in run #qRun                 (%d)\n" % defaults.quality_run
+    if hasattr(defaults, 'quality_values'):
+        qvals_str = ','.join([ str(x) for x in defaults.quality_values ])
+        uStr += "\n  -q qvals:      use qvals as the quality values                 (%s)\n" % qvals_str
         oStr += "q:"
+
+    if hasattr(defaults, 'run_xcenc'):
+        uStr += "  -x:            run xc-enc                                      (run vpxenc)\n"
+        oStr += "x"
 
     if hasattr(defaults, 'quality_s'):
         uStr += "  -S s_ac_qi:    use s_ac_qi for S quantizer                     (%d)\n" % defaults.quality_s
@@ -260,8 +265,8 @@ def usage_str(defaults):
         oStr += "Y:"
 
     if hasattr(defaults, 'num_passes'):
-        num_pass_str = "%d,%d,%d,%d" % defaults.num_passes
-        min_pass_str = "%d,%d,%d,%d" % defaults.min_passes
+        num_pass_str = ','.join([ str(x) for x in defaults.num_passes ])
+        min_pass_str = ','.join([ str(x) for x in defaults.min_passes ])
         uStr +=  "  -p w,x,y,z:    ph1,ph2,ph3,ph4 num passes                      (%s)\n" % num_pass_str
         uStr +=  "                 min for each phase is %s\n" % min_pass_str
         oStr += "p:"
@@ -305,6 +310,13 @@ def usage_str(defaults):
     oStr += "c:s:k:"
 
     return (uStr, oStr)
+
+def to_numlist(arg, outlist):
+    vals = arg.replace(' ', '').split(',')
+    del outlist[:]
+    for val in vals:
+        if len(val) > 0:
+            outlist.append(int(val))
 
 def options(server_info):
     (uStr, oStr) = usage_str(server_info)
@@ -383,17 +395,16 @@ def options(server_info):
                 print "ERROR: Invalid argument to -p: '%s'" % arg
                 print uStr
                 sys.exit(1)
-        elif opt == "-N":
-            vals = arg.replace(' ', '').split(',')
-            server_info.num_list = []
-            for val in vals:
-                if len(val) > 0:
-                    server_info.num_list.append(int(val))
+        elif opt == "-N" or opt == "-q":
+            to_numlist(arg, server_info.num_list)
             server_info.num_parts = len(server_info.num_list)
+            assert len(server_info.num_list) > 0
         elif opt == "-t":
             server_info.port_number = int(arg)
         elif opt == "-q":
-            server_info.quality_run = int(arg)
+            to_numlist(arg, server_info.quality_values)
+            server_info.quality_valstring = '_'.join([ str(x) for x in server_info.quality_values ])
+            assert len(server_info.quality_values) > 0
         elif opt == "-S":
             server_info.quality_s = int(arg)
         elif opt == "-Y":
@@ -402,6 +413,8 @@ def options(server_info):
             server_info.state_srv_addr = arg
         elif opt == "-T":
             server_info.state_srv_port = int(arg)
+        elif opt == "-x":
+            server_info.run_xcenc = True
         else:
             assert False, "logic error: got unexpected option %s from getopt" % opt
 
