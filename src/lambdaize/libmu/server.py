@@ -264,6 +264,10 @@ def usage_str(defaults):
         uStr += "  -Y y_ac_qi:    use y_ac_qi for Y quantizer                     (%d)\n" % defaults.quality_y
         oStr += "Y:"
 
+    if hasattr(defaults, 'upload_states'):
+        uStr += "  -u:            upload prev.state and final.state               (do not upload)\n"
+        oStr += "u"
+
     if hasattr(defaults, 'num_passes'):
         num_pass_str = ','.join([ str(x) for x in defaults.num_passes ])
         min_pass_str = ','.join([ str(x) for x in defaults.min_passes ])
@@ -415,6 +419,8 @@ def options(server_info):
             server_info.state_srv_port = int(arg)
         elif opt == "-x":
             server_info.run_xcenc = True
+        elif opt == "-u":
+            server_info.upload_states = True
         else:
             assert False, "logic error: got unexpected option %s from getopt" % opt
 

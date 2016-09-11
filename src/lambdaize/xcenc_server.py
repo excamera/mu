@@ -11,6 +11,8 @@ class ServerInfo(object):
     state_srv_addr = '127.0.0.1'
     state_srv_port = 13337
 
+    upload_states = False
+
     quality_s = 127
     quality_y = 30
 
@@ -44,12 +46,24 @@ class XCEncFinishState(CommandListState):
                   , "set:outkey:{0}/comp_txt/{1}.txt"
                   , "upload:"
                   , ("OK:UPLOADING", None)
+                  , ("OK:UPLOAD(", "set:fromfile:##TMPDIR##/prev.state")
+                  , "set:outkey:{0}/prev_state/{1}.state"
+                  , "upload:"
+                  , ("OK:UPLOADING", None)
+                  , ("OK:UPLOAD(", "set:fromfile:##TMPDIR##/final.state")
+                  , "set:outkey:{0}/final_state/{1}.state"
+                  , "upload:"
+                  , ("OK:UPLOADING", None)
                   , ("OK:UPLOAD(", "quit:")
                   ]
 
     def __init__(self, prevState, aNum=0):
         super(XCEncFinishState, self).__init__(prevState, aNum)
         if self.actorNum > 0:
+            if not ServerInfo.upload_states:
+                # skip uploading prev.state and final.state
+                del self.commands[4:-1]
+                del self.expects[4:-1]
             pStr = "%08d" % (self.actorNum + ServerInfo.num_offset)
             vName = ServerInfo.video_name
             self.commands = [ s.format(vName, pStr) if s is not None else None for s in self.commands ]
