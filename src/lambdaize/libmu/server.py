@@ -7,6 +7,7 @@ import os
 import select
 import socket
 import sys
+import time
 
 import pylaunch
 import libmu.defs
@@ -75,6 +76,7 @@ def setup_server_listen(server_info):
 #  server mainloop
 ###
 def server_main_loop(states, constructor, server_info):
+    server_info.start_time = time.time()
     # handle profiling if specified
     if server_info.profiling:
         pr = cProfile.Profile()
@@ -194,7 +196,8 @@ def server_main_loop(states, constructor, server_info):
             error.append(num)
             errvals.append(repr(state))
         elif fo is not None:
-            fo.write("%d:%s\n" % (state.actorNum, str(state.get_timestamps())))
+            timestamps = [ ts - server_info.start_time for ts in state.get_timestamps() ]
+            fo.write("%d:%s\n" % (state.actorNum, str(timestamps)))
 
     if server_info.profiling:
         pr.disable()
