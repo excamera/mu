@@ -199,10 +199,10 @@ def run():
                     state_id_map[tid].enqueue(msg)
 
             # every once in a while, go through all the tombstones and get rid of old ones
-            elif npasses_out == 0:
+            elif len(pfds) == 0:
                 for tidx in reversed(range(0, len(tstones))):
                     now = time.time()
-                    if tstones[tidx][1] - now > ServerInfo.tombstone_timeout:
+                    if now - tstones[tidx][1] > ServerInfo.tombstone_timeout:
                         del tstones[tidx]
 
                 if len(tstones) == 0:
