@@ -2,7 +2,7 @@
 
 import os
 
-from libmu import util, server, TerminalState, CommandListState, SuperpositionState, ForLoopState
+from libmu import util, server, TerminalState, CommandListState, SuperpositionState, ForLoopState, OnePassState, ErrorState
 
 class ServerInfo(object):
     states = []
@@ -19,6 +19,7 @@ class ServerInfo(object):
     video_name = "sintel-1k-y4m_06"
     num_offset = 0
     num_parts = 1
+    overprovision = 25
 
     tot_passes = 9
     num_passes = (1, 3, 3, 2)
@@ -38,6 +39,13 @@ class ServerInfo(object):
 
 class FinalState(TerminalState):
     extra = "(finished)"
+
+    def __init__(self, prevState, aNum=0):
+        super(FinalState, self).__init__(prevState, aNum)
+        if not self.info.get('converged', False):
+            # we didn't converge. reclass ourselves as an error state.
+            self.__class__ = ErrorState
+            self.err = "Convergence check failed for state %d" % self.actorNum
 
 class XCEncFinishState(CommandListState):
     extra = "(uploading comparison data and quitting command)"
@@ -73,13 +81,22 @@ class XCEncFinishState(CommandListState):
             del self.commands[1:]
             del self.expects[1:]
 
+class XCEncCheckConvergedState(OnePassState):
+    extra = "(checking result of comparison)"
+    command = None
+    expect = "OK:RETVAL("
+    nextState = TerminalState
+
+    def post_transition(self):
+        last_msg = self.messages[-1]
+        self.info['converged'] = self.actorNum < ServerInfo.tot_passes - 1 or last_msg[:12] == "OK:RETVAL(0)"
+        return self.nextState(self)
 
 class XCEncCompareState(CommandListState):
     extra = "(comparing states)"
-    nextState = TerminalState
+    nextState = XCEncCheckConvergedState
     commandlist = [ (None, "run:test ! -f \"##TMPDIR##/prev.state\" || ./comp-states \"##TMPDIR##/prev.state\" \"##TMPDIR##/final.state\" >> \"##TMPDIR##\"/comp.txt")
                   , ("OK:RUNNING", None)
-                  , ("OK:RETVAL(0)", None)
                   ]
 
 class XCEncUploadState(CommandListState):

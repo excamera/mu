@@ -57,7 +57,11 @@ def server_launch(server_info, event, akid, secret):
     if pid == 0:
         # pylint: disable=no-member
         # (pylint can't "see" into C modules)
-        pylaunch.launchpar(server_info.num_parts, server_info.lambda_function,
+        if hasattr(server_info, 'overprovision'):
+            overprovision = server_info.overprovision
+        else:
+            overprovision = 0
+        pylaunch.launchpar(server_info.num_parts + overprovision, server_info.lambda_function,
                            akid, secret, json.dumps(event), server_info.regions)
         sys.exit(0)
 
@@ -234,6 +238,10 @@ def usage_str(defaults):
 
     uStr += "\n  -n nParts:     launch nParts lambdas                           (%d)\n" % defaults.num_parts
     oStr += "n:"
+
+    if hasattr(defaults, 'overprovision'):
+        uStr += "  -X nExtra:     overprovision lambda invocations by nExtra      (%d)\n" % defaults.overprovision
+        oStr += "X:"
 
     if hasattr(defaults, 'num_list'):
         uStr += "  -N a,b,c,...   run clients numbered exactly a, b, c, ...       (None)\n"
@@ -421,6 +429,8 @@ def options(server_info):
             server_info.run_xcenc = True
         elif opt == "-u":
             server_info.upload_states = True
+        elif opt == "-X":
+            server_info.overprovision = int(arg)
         else:
             assert False, "logic error: got unexpected option %s from getopt" % opt
 
