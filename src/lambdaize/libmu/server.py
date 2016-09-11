@@ -220,9 +220,8 @@ def usage_str(defaults):
     uStr += "  --             --                                              --\n"
     uStr += "  -h:            show this message\n"
     uStr += "  -D:            enable debug                                    (disabled)\n"
-
     oStr += "hD"
-    
+
     if hasattr(defaults, 'out_file'):
         oFileStr = "'%s'" % defaults.out_file if defaults.out_file is not None else "None"
         uStr += "  -O oFile:      state machine times output file                 (%s)\n" % oFileStr
@@ -248,10 +247,6 @@ def usage_str(defaults):
         uStr += "  -o nOffset:    skip this many input chunks when processing     (%d)\n" % defaults.num_offset
         oStr += "o:"
 
-    if hasattr(defaults, 'num_passes'):
-        uStr +=  "  -p nPasses:    number of xcenc passes                          (%d)\n" % defaults.num_passes
-        oStr += "p:"
-
     if hasattr(defaults, 'quality_run'):
         uStr += "\n  -q qRun:       use quality values in run #qRun                 (%d)\n" % defaults.quality_run
         oStr += "q:"
@@ -263,6 +258,13 @@ def usage_str(defaults):
     if hasattr(defaults, 'quality_y'):
         uStr += "  -Y y_ac_qi:    use y_ac_qi for Y quantizer                     (%d)\n" % defaults.quality_y
         oStr += "Y:"
+
+    if hasattr(defaults, 'num_passes'):
+        num_pass_str = "%d,%d,%d,%d" % defaults.num_passes
+        min_pass_str = "%d,%d,%d,%d" % defaults.min_passes
+        uStr +=  "  -p w,x,y,z:    ph1,ph2,ph3,ph4 num passes                      (%s)\n" % num_pass_str
+        uStr +=  "                 min for each phase is %s\n" % min_pass_str
+        oStr += "p:"
 
     if hasattr(defaults, 'video_name'):
         uStr += "\n  -v vidName:    video name                                      ('%s')\n" % defaults.video_name
@@ -361,7 +363,26 @@ def options(server_info):
         elif opt == "-P":
             server_info.profiling = arg
         elif opt == "-p":
-            server_info.num_passes = int(arg)
+            try:
+                (p1, p2, p3, p4) = arg.replace(' ', '').split(',')
+                p1 = int(p1)
+                p2 = int(p2)
+                p3 = int(p3)
+                p4 = int(p4)
+                assert p1 >= server_info.min_passes[0] and \
+                       p2 >= server_info.min_passes[1] and \
+                       p3 >= server_info.min_passes[2] and \
+                       p4 >= server_info.min_passes[3]
+                server_info.num_passes = (p1, p2, p3, p4)
+                server_info.tot_passes = sum(server_info.num_passes)
+            except AssertionError:
+                print "ERROR: Invalid number of passes specified."
+                print uStr
+                sys.exit(1)
+            except:
+                print "ERROR: Invalid argument to -p: '%s'" % arg
+                print uStr
+                sys.exit(1)
         elif opt == "-N":
             vals = arg.replace(' ', '').split(',')
             server_info.num_list = []
