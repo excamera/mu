@@ -111,6 +111,20 @@ class XCEncUploadAndCompare(SuperpositionState):
     nextState = XCEncFinishState
     state_constructors = [XCEncUploadState, XCEncCompareState]
 
+class XCEncUploadFirstIVFState(CommandListState):
+    extra = "(uploading first IVF output)"
+    commandlist = [ (None, "upload:")
+                  , ("OK:UPLOADING", None)
+                  , ("OK:UPLOAD(", "set:outkey:{0}/out/{1}.ivf")
+                  , ("OK:SET", None)
+                  ]
+
+    def __init__(self, prevState, aNum=0):
+        super(XCEncUploadFirstIVFState, self).__init__(prevState, aNum)
+        vName = ServerInfo.video_name
+        pStr = "%08d" % (self.actorNum + ServerInfo.num_offset)
+        self.commands = [ s.format(vName, pStr) if s is not None else None for s in self.commands ]
+
 class XCEncRunState(CommandListState):
     extra = "(running xc-enc)"
     commandlist = [ (None, "seti:run_iter:{0}")
@@ -131,6 +145,9 @@ class XCEncRunState(CommandListState):
         super(XCEncRunState, self).__init__(prevState, aNum)
 
         pass_num = self.info['iter_key']
+        if ServerInfo.upload_states and pass_num == 0:
+            self.nextState = XCEncUploadFirstIVFState
+
         if pass_num < ServerInfo.num_passes[0]:
             qstring = "--y-ac-qi %d" % ServerInfo.quality_y
         elif pass_num < sum(ServerInfo.num_passes[:2]):
@@ -139,6 +156,9 @@ class XCEncRunState(CommandListState):
             qstring = "--s-ac-qi %d" % ServerInfo.quality_s
         else:
             qstring = "--s-ac-qi %d --refine-sw" % ServerInfo.quality_s
+            if pass_num == ServerInfo.tot_passes - 1:
+                qstring += " --fix-prob-tables"
+
         self.commands = [ s.format(self.info['iter_key'], qstring) if s is not None else None for s in self.commands ]
 
 class XCEncLoopState(ForLoopState):
@@ -154,6 +174,7 @@ class XCEncLoopState(ForLoopState):
 
 # need to do this here to avoid use-before-def
 XCEncRunState.nextState = XCEncLoopState
+XCEncUploadFirstIVFState.nextState = XCEncLoopState
 
 class XCEncSettingsState(CommandListState):
     extra = "(preparing worker)"
@@ -162,7 +183,7 @@ class XCEncSettingsState(CommandListState):
     commandlist = [ ("OK:HELLO", "set:inkey:{0}/{1}.y4m")
                   , "set:targfile:##TMPDIR##/input.y4m"
                   , "set:fromfile:##TMPDIR##/output.ivf"
-                  , "set:outkey:{0}/out/{1}.ivf"
+                  , "set:outkey:{0}/{7}/{1}.ivf"
                   , "seti:expect_statefile:{4}"
                   , "seti:send_statefile:{5}"
                   , "connect:{6}:HELLO_STATE:{2}:{1}:{3}"
@@ -183,7 +204,8 @@ class XCEncSettingsState(CommandListState):
         expS = 1 if self.actorNum != 0 else 0
         sndS = 1 if self.actorNum != ServerInfo.num_parts - 1 else 0
         stateAddr = "%s:%d" % (ServerInfo.state_srv_addr, ServerInfo.state_srv_port)
-        self.commands = [ s.format(vName, pStr, rStr, nNum, expS, sndS, stateAddr) if s is not None else None for s in self.commands ]
+        outDest = "first" if ServerInfo.upload_states else "out"
+        self.commands = [ s.format(vName, pStr, rStr, nNum, expS, sndS, stateAddr, outDest) if s is not None else None for s in self.commands ]
 
 def run():
     server.server_main_loop(ServerInfo.states, XCEncSettingsState, ServerInfo)
