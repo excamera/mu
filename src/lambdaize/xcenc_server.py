@@ -37,6 +37,14 @@ class ServerInfo(object):
 
     client_uniq = None
 
+    xcenc_invocation = "##INSTATEWAIT## ./xc-enc ##QUALITY## -i y4m -O \"##TMPDIR##/final.state\" -o \"##TMPDIR##/output.ivf\" ##INSTATESWITCH## \"##TMPDIR##/input.y4m\" 2>&1"
+    vpxenc_invocation = "./vpxenc -q --codec=vp8 --good --cpu-used=0 --end-usage=cq --min-q=0 --max-q=63 --cq-level=##QUALITY## --buf-initial-sz=10000 --buf-optimal-sz=20000 --buf-sz=40000 --undershoot-pct=100 --passes=2 --auto-alt-ref=1 --threads=1 --token-parts=0 --tune=ssim --target-bitrate=4294967295 -o \"##TMPDIR##/output.ivf\" \"##TMPDIR##/input.y4m\""
+    ### commands look like this:
+    # PHASE 1 # vpxenc and then xc-dump
+    # PHASE 2 # xc-enc                                  -i y4m -O final.state -o output.ivf -r -I 0.state           -p prev.ivf                      input.y4m 2>&1
+    # PHASE 3 # xc-enc --s-ac-qi ${S_AC_QI}             -i y4m -O final.state -o output.ivf -r -I $(($j - 1)).state -p prev.ivf -S $(($j - 2)).state input.y4m 2>&1
+    # PHASE 4 # xc-enc --s-ac-qi ${S_QC_QI} --refine-sw -i y4m -O final.state -o output.ivf -r -I $(($j - 1)).state -p prev.ivf -S $(($j - 2)).state input.y4m 2>&1
+
 class FinalState(TerminalState):
     extra = "(finished)"
 
@@ -171,31 +179,42 @@ class XCEncUploadFirstIVFState(XCEncUploadState):
         self.info['ssim_quality_key'] = "%d_%d_first" % (ServerInfo.quality_y, ServerInfo.quality_s)
         self.info['decode_input_state'] = ""
 
+class XCEncDumpState(CommandListState):
+    extra = "(running xc-dump to get output state from vpxenc)"
+    nextState = TerminalState
+    commandlist = [ (None, "run:./xc-dump \"##TMPDIR##/output.ivf\" \"##TMPDIR##/final.state\"")
+                  , ("OK:RUNNING", None)
+                  , ("OK:RETVAL(0)", None)
+                  ]
+
+    def __init__(self, prevState, aNum=0):
+        super(XCEncDumpState, self).__init__(prevState, aNum)
+        if ServerInfo.upload_states:
+            self.nextState = XCEncUploadFirstIVFState
+
 class XCEncRunState(CommandListState):
     extra = "(running xc-enc)"
     commandlist = [ (None, "seti:run_iter:{0}")
                   , "set:cmdquality:{1}"
                   , "run:test ! -f \"##TMPDIR##/final.state\" || cp \"##TMPDIR##/final.state\" \"##TMPDIR##/prev.state\""
                   , ("OK:RUNNING", None)
-                  , ("OK:RETVAL(0)", "run:##INSTATEWAIT## ./xc-enc ##QUALITY## -i y4m -O \"##TMPDIR##/final.state\" -o \"##TMPDIR##/output.ivf\" ##INSTATESWITCH## \"##TMPDIR##/input.y4m\" 2>&1")
+                  , ("OK:RETVAL(0)", "run:{2}")
                   , ("OK:RUNNING", None)
                   , ("OK:RETVAL(0)", None)
                   ]
-    ### commands look like this:
-    # PHASE 1 # ${XC_ENC} --y-ac-qi ${Y_AC_QI}             -i y4m -O final.state -o output.ivf                                                          input.y4m 2>&1
-    # PHASE 2 # ${XC_ENC}                                  -i y4m -O final.state -o output.ivf -r -I 0.state           -p prev.ivf                      input.y4m 2>&1
-    # PHASE 3 # ${XC_ENC} --s-ac-qi ${S_AC_QI}             -i y4m -O final.state -o output.ivf -r -I $(($j - 1)).state -p prev.ivf -S $(($j - 2)).state input.y4m 2>&1
-    # PHASE 4 # ${XC_ENC} --s-ac-qi ${S_QC_QI} --refine-sw -i y4m -O final.state -o output.ivf -r -I $(($j - 1)).state -p prev.ivf -S $(($j - 2)).state input.y4m 2>&1
 
     def __init__(self, prevState, aNum=0):
         super(XCEncRunState, self).__init__(prevState, aNum)
 
         pass_num = self.info['iter_key']
-        if ServerInfo.upload_states and pass_num == 0:
-            self.nextState = XCEncUploadFirstIVFState
+        if pass_num == 0:
+            self.nextState = XCEncDumpState
+            cmdstring = ServerInfo.vpxenc_invocation
+        else:
+            cmdstring = ServerInfo.xcenc_invocation
 
         if pass_num < ServerInfo.num_passes[0]:
-            qstring = "--y-ac-qi %d" % ServerInfo.quality_y
+            qstring = str(ServerInfo.quality_y)
         elif pass_num < sum(ServerInfo.num_passes[:2]):
             qstring = ""
         elif pass_num < sum(ServerInfo.num_passes[:3]):
@@ -205,7 +224,7 @@ class XCEncRunState(CommandListState):
             if pass_num == ServerInfo.tot_passes - 1:
                 qstring += " --fix-prob-tables"
 
-        self.commands = [ s.format(self.info['iter_key'], qstring) if s is not None else None for s in self.commands ]
+        self.commands = [ s.format(self.info['iter_key'], qstring, cmdstring) if s is not None else None for s in self.commands ]
 
 class XCEncLoopState(ForLoopState):
     extra = "(xc-enc looping)"
@@ -220,6 +239,7 @@ class XCEncLoopState(ForLoopState):
 
 # need to do this here to avoid use-before-def
 XCEncRunState.nextState = XCEncLoopState
+XCEncDumpState.nextState = XCEncLoopState
 XCEncUploadFirstIVFState.thenState = XCEncLoopState
 
 class XCEncSettingsState(CommandListState):
