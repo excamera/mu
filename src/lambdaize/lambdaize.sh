@@ -8,6 +8,7 @@
 set -o pipefail
 DEFAULT_MEM_SIZE=128
 DEFAULT_TIMEOUT=3
+DEFAULT_REGION=us-east-1
 EXTRA_PACKAGE_FILE=lambda_extra_packages.tar.gz
 SKIPLIBS=("linux-vdso" "libc" "libpthread" "ld-linux" "librt" "libdl")
 
@@ -22,6 +23,7 @@ if [ ${#@} -lt 1 ]; then
     echo "    TIMEOUT (optional, default ${DEFAULT_TIMEOUT}) execution timeout in seconds"
     echo "    SKIP_UPLOAD (optional) don't upload the resulting zipfile to lambda"
     echo "    ALLOW_LD (optional) allow dynamic executable (this could break!)"
+    echo "    REGION (optional, default ${DEFAULT_REGION}) install lambda in given region"
     exit 1
 fi
 
@@ -92,6 +94,9 @@ if [ -z $MEM_SIZE ]; then
 fi
 if [ -z $TIMEOUT ]; then
     TIMEOUT="$DEFAULT_TIMEOUT"
+fi
+if [ -z $REGION ]; then
+    REGION="$DEFAULT_REGION"
 fi
 
 #
@@ -203,5 +208,6 @@ if [ -z "$SKIP_UPLOAD" ]; then
         --timeout "$TIMEOUT" \
         --memory-size "$MEM_SIZE" \
         --publish \
+        --region "$REGION" \
         --zip-file fileb://"$ZIPFILE"
 fi
