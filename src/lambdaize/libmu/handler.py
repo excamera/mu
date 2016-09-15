@@ -84,7 +84,8 @@ def _background(runner, vals, queuemsg):
             info = vals.setdefault('runinfo', [])
             info.append((pid, SocketNB(sock)))
 
-            vals['cmdsock'].enqueue(queuemsg)
+            if not vals.get('bg_silent'):
+                vals['cmdsock'].enqueue(queuemsg)
             return False
 
         else:

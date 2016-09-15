@@ -120,12 +120,13 @@ def server_main_loop(states, constructor, server_info):
         errStates = len([ 1 for s in states if isinstance(s, libmu.machine_state.ErrorState) ])
         doneStates = len([ 1 for s in states if isinstance(s, libmu.machine_state.TerminalState) ]) - errStates
         waitStates = server_info.num_parts - len(states)
-        print "SERVER status: active=%d, done=%d, prelaunch=%d, error=%d" % (actStates, doneStates, waitStates, errStates)
 
         # enhanced output in debugging mode
-        if libmu.defs.Defs.debug:
-            for s in states:
-                print "    %s" % str(s)
+        #if libmu.defs.Defs.debug:
+        for s in states:
+            print "    %s" % str(s)
+
+        print "SERVER status: active=%d, done=%d, prelaunch=%d, error=%d" % (actStates, doneStates, waitStates, errStates)
 
     while True:
         dflags = rwsplit(states, rwflags)
@@ -267,23 +268,23 @@ def usage_str(defaults):
         uStr += "  -x:            run xc-enc                                      (run vpxenc)\n"
         oStr += "x"
 
-    if hasattr(defaults, 'quality_s'):
-        uStr += "  -S s_ac_qi:    use s_ac_qi for S quantizer                     (%d)\n" % defaults.quality_s
-        oStr += "S:"
-
     if hasattr(defaults, 'quality_y'):
         uStr += "  -Y y_ac_qi:    use y_ac_qi for Y quantizer                     (%d)\n" % defaults.quality_y
         oStr += "Y:"
 
+    if hasattr(defaults, 'run_ssim'):
+        uStr += "  -S:            compute SSIM of chunk (4k takes a long time!)   (%s)\n" % str(defaults.run_ssim)
+        oStr += "S"
+
     if hasattr(defaults, 'upload_states'):
-        uStr += "  -u:            upload prev.state and final.state               (do not upload)\n"
+        uStr += "  -u:            upload prev.state and final.state               (%s)\n" % str(defaults.upload_states)
         oStr += "u"
 
     if hasattr(defaults, 'num_passes'):
         num_pass_str = ','.join([ str(x) for x in defaults.num_passes ])
         min_pass_str = ','.join([ str(x) for x in defaults.min_passes ])
-        uStr +=  "  -p w,x,y,z:    ph1,ph2,ph3,ph4 num passes                      (%s)\n" % num_pass_str
-        uStr +=  "                 min for each phase is %s\n" % min_pass_str
+        uStr += "  -p w,x,y,z:    ph1,ph2,ph3,ph4 num passes                      (%s)\n" % num_pass_str
+        uStr += "                 min for each phase is %s\n" % min_pass_str
         oStr += "p:"
 
     if hasattr(defaults, 'video_name'):
@@ -420,8 +421,6 @@ def options(server_info):
             to_numlist(arg, server_info.quality_values)
             server_info.quality_valstring = '_'.join([ str(x) for x in server_info.quality_values ])
             assert len(server_info.quality_values) > 0
-        elif opt == "-S":
-            server_info.quality_s = int(arg)
         elif opt == "-Y":
             server_info.quality_y = int(arg)
         elif opt == "-H":
@@ -434,6 +433,8 @@ def options(server_info):
             server_info.upload_states = True
         elif opt == "-X":
             server_info.overprovision = int(arg)
+        elif opt == "-S":
+            server_info.run_ssim = True
         else:
             assert False, "logic error: got unexpected option %s from getopt" % opt
 
@@ -448,6 +449,8 @@ def options(server_info):
         print
         print uStr
         sys.exit(1)
+
+    assert server_info.num_passes[1] == 0, "Phase two is not supported. You must set it to zero!"
 
     for f in [cacertfile, srvcrtfile, srvkeyfile]:
         try:

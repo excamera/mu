@@ -147,10 +147,18 @@ def make_cmdstring(msg, vals):
 ###
 #  process strings for s3 commands before uploading
 ###
-def make_urstring(_, vals, keyk, filek):
+def make_urstring(msg, vals, keyk, filek):
     bucket = vals.get('bucket')
-    key = vals.get(keyk)
-    filename = vals.get(filek)
+    if msg != "":
+        cmd_data = msg.split('\0', 1)
+        key = filename = None
+        if len(cmd_data) == 2:
+            key = cmd_data[0]
+            filename = cmd_data[1]
+    else:
+        key = vals.get(keyk)
+        filename = vals.get(filek)
+
     success = bucket is not None and key is not None and filename is not None
 
     if success:
@@ -183,6 +191,7 @@ def lambda_handler(event, _):
     expect_statefile = int(event.get('expect_statefile', 0))
     send_statefile = int(event.get('send_statefile', 0))
     rm_tmpdir = int(event.get('rm_tmpdir', 1))
+    bg_silent = int(event.get('bg_silent', 0))
 
     vals = { 'bucket': bucket
            , 'region': region
@@ -194,6 +203,7 @@ def lambda_handler(event, _):
            , 'expect_statefile': expect_statefile
            , 'send_statefile': send_statefile
            , 'rm_tmpdir': rm_tmpdir
+           , 'bg_silent': bg_silent
            , 'run_iter': 0
            , '_tmpdir': tempfile.mkdtemp(prefix="lambda_", dir="/tmp")
            }

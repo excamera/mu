@@ -10,12 +10,13 @@ import libmu
 import test.defs
 import test.util
 
-def run_tests(use_mode, use_nonblock):
+def run_tests(use_mode, use_nonblock, use_silent):
     libmu.Defs.debug = True
 
     event = { 'mode': use_mode
             , 'port': 13579
             , 'nonblock': use_nonblock
+            , 'bg_silent': use_silent
             , 'cacert': test.defs.Defs.cacert
             , 'srvcrt': test.defs.Defs.srvcrt
             , 'srvkey': test.defs.Defs.srvkey
@@ -29,11 +30,13 @@ if __name__ == "__main__":
         lambda_function_template.cmdstring = ""
         mode = 2
         nonblock = 1
+        silent = 1
 
     elif sys.argv[1] is "1":
         lambda_function_template.cmdstring = "/home/kwantam/git/github.com/daala_tools/png2y4m -o ##OUTFILE## ##INFILE##"
         mode = 1
         nonblock = 0
+        silent = 0
 
     else:
         print "Usage: %s <0|1>" % sys.argv[0]
@@ -41,4 +44,4 @@ if __name__ == "__main__":
         print "1 : run png2y4m client"
         sys.exit(1)
 
-    run_tests(mode, nonblock)
+    run_tests(mode, nonblock, silent)
