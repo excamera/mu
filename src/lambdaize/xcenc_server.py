@@ -87,7 +87,7 @@ class XCEncFinishState(CommandListState):
     extra = "(uploading comparison data and quitting command)"
     pipelined = True
     # NOTE it's OK to pipeline this because we'll get three "UPLOAD(" responses in *some* order
-    #      if bg_silent were false, this would very likely break.
+    #      if bg_silent were false, we'd have to use a SuperpositionState to run the uploads in parallel
     nextState = FinalState
     commandlist = [ (None, "upload:{0}/comp_txt/{1}.txt\0##TMPDIR##/comp.txt")
                   , ("OK:UPLOAD(", "upload:{0}/prev_state/{1}.state\0##TMPDIR##/prev.state")
@@ -271,7 +271,7 @@ def main():
     server.options(ServerInfo)
 
     # launch the lambdas
-    event = { "mode": 2
+    event = { "mode": 1
             , "port": ServerInfo.port_number
             , "addr": None  # server_launch will fill this in for us
             , "nonblock": 1
