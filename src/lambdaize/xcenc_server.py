@@ -80,7 +80,7 @@ class XCEncFinishState(CommandListState):
     def __init__(self, prevState, aNum=0):
         if not ServerInfo.upload_states:
             self.commandlist = [ (None, "quit:") ]
-        elif prevState.actorNum == 0:
+        elif prevState.actorNum == 0 or self.info.get('converged', False):
             self.commandlist = [ self.commandlist[i] for i in (0, 3) ]
 
         super(XCEncFinishState, self).__init__(prevState, aNum)
