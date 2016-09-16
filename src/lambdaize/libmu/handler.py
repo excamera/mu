@@ -126,12 +126,12 @@ def do_retrieve(msg, vals):
         try:
             s3_client.download_file(bucket, key, filename)
         except:
-            donemsg = 'FAIL(retrieving from s3:\n%s)' % traceback.format_exc()
+            donemsg = 'FAIL(retrieving %s:%s->%s from s3:\n%s)' % (bucket, key, filename, traceback.format_exc())
             retval = 1
 
         return (donemsg, retval)
 
-    return _background(ret_helper, vals, 'OK:RETRIEVING(%s/%s)' % (bucket, key))
+    return _background(ret_helper, vals, 'OK:RETRIEVING(%s/%s->)' % (bucket, key, filename))
 
 ###
 #  tell the client to upload a segment to s3
@@ -148,7 +148,7 @@ def do_upload(msg, vals):
         try:
             s3_client.upload_file(filename, bucket, key)
         except:
-            donemsg = 'FAIL(uploading to s3:\n%s)' % traceback.format_exc()
+            donemsg = 'FAIL(uploading %s->%s:%s to s3:\n%s)' % (filename, bucket, key, traceback.format_exc())
             retval = 1
 
         return (donemsg, retval)
