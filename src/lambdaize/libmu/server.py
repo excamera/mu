@@ -2,12 +2,15 @@
 
 import cProfile
 import datetime
+import fcntl
 import getopt
 import json
 import os
 import select
 import socket
+import struct
 import sys
+import termios
 import time
 
 import pylaunch
@@ -59,12 +62,8 @@ def server_launch(server_info, event, akid, secret):
     if pid == 0:
         # pylint: disable=no-member
         # (pylint can't "see" into C modules)
-        if hasattr(server_info, 'overprovision'):
-            overprovision = server_info.overprovision
-        else:
-            overprovision = 0
-        pylaunch.launchpar(server_info.num_parts + overprovision, server_info.lambda_function,
-                           akid, secret, json.dumps(event), server_info.regions)
+        total_parts = server_info.num_parts + getattr(server_info, 'overprovision', 0)
+        pylaunch.launchpar(total_parts, server_info.lambda_function, akid, secret, json.dumps(event), server_info.regions)
         sys.exit(0)
 
 ###
@@ -117,6 +116,16 @@ def server_main_loop(states, constructor, server_info):
     npasses_out = 0
     start_time = time.time()
 
+    try:
+        (screen_height, screen_width, _, _) = struct.unpack("HHHH", fcntl.ioctl(0, termios.TIOCGWINSZ, struct.pack("HHHH", 0, 0, 0, 0)))
+    except:
+        screen_width = 80
+        screen_height = 50
+    n_per_line = 1 + server_info.num_parts // screen_height
+    n_chars_maybe = max(screen_width // n_per_line, 24)
+    n_across = max(screen_width // n_chars_maybe, 1)
+    n_chars = screen_width // n_across
+
     def show_status():
         actStates = len([ 1 for v in rwflags if v != 0 ])
         errStates = len([ 1 for s in states if isinstance(s, libmu.machine_state.ErrorState) ])
@@ -126,10 +135,21 @@ def server_main_loop(states, constructor, server_info):
 
         # enhanced output in debugging mode
         #if libmu.defs.Defs.debug:
+        sys.stdout.write("\033[3J\033[H\033[2J")
+        sys.stdout.flush()
+        n_printed = 0
         for s in states:
-            print "    %s" % str(s)
-
-        print "SERVER status (%s): active=%d, done=%d, prelaunch=%d, error=%d" % (runTime, actStates, doneStates, waitStates, errStates)
+            sys.stdout.write(str(s)[:n_chars])
+            n_printed += 1
+            if n_printed == n_across:
+                sys.stdout.write('\n')
+                n_printed = 0
+            else:
+                sys.stdout.write(' ')
+        if n_printed != 0:
+            sys.stdout.write("\n")
+        sys.stdout.write("SERVER status (%s): active=%d, done=%d, prelaunch=%d, error=%d" % (runTime, actStates, doneStates, waitStates, errStates))
+        sys.stdout.flush()
 
     while True:
         dflags = rwsplit(states, rwflags)

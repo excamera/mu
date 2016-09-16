@@ -37,7 +37,7 @@ class MachineState(SocketNB):
         return "%s: %s" % (type(self), str(self))
 
     def __str__(self):
-        return "Actor#%d: %s" % (self.actorNum, self.str_extra())
+        return "%d:%s" % (self.actorNum, self.str_extra())
 
     def str_extra(self):
         return self.extra
@@ -204,7 +204,7 @@ class MultiPassState(MachineState):
         self.want_handle = True
 
     def str_extra(self):
-        return "(%s (key #%d))" % (self.extra, self.cmdNum)
+        return "(%s (#%d))" % (self.extra, self.cmdNum)
 
     def get_expect(self):
         return self.expects[self.cmdNum]
@@ -280,7 +280,7 @@ class ForLoopState(OnePassState):
             return self.loopState(self)
 
     def str_extra(self):
-        return "(for loop, start:%d iter:%d end:%d)" % (self.iterInit, self.info[self.iterKey], self.iterFin)
+        return "(for %d; %d; %d)" % (self.iterInit, self.info[self.iterKey], self.iterFin)
 
 class SuperpositionState(MachineState):
     state_constructors = [TerminalState]
