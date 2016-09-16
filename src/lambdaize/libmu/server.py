@@ -295,7 +295,7 @@ def usage_str(defaults):
         uStr += "  -Y y_ac_qi:    use y_ac_qi for Y quantizer                     (%d)\n" % defaults.quality_y
         oStr += "Y:"
 
-    if hasattr(defaults, 'run_ssim'):
+    if hasattr(defaults, 'quality_s'):
         uStr += "  -S s_ac_qi:    use s_ac_qi for Y quantizer                     (%s)\n" % str(defaults.quality_s)
         oStr += "S:"
 
