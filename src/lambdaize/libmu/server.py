@@ -174,7 +174,7 @@ def server_main_loop(states, constructor, server_info):
             npasses_out = 0
             show_status()
 
-        pfds = poll_obj.poll(10000)
+        pfds = poll_obj.poll(5000)
         npasses_out += 1
 
         if len(pfds) == 0:
