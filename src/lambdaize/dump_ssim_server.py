@@ -59,17 +59,20 @@ class DumpSSIMRetrieveState(CommandListState):
     commandlist = [ ("OK:HELLO", "retrieve:{0}/{1}.y4m\0##TMPDIR##/orig.y4m")
                   , "retrieve:{0}/first/{1}.ivf\0##TMPDIR##/vpx.ivf"
                   , "retrieve:{0}/out/{1}.ivf\0##TMPDIR##/xc.ivf"
-                  , "retrieve:{0}/prev_state/{1}.state\0##TMPDIR##/final.state"
+                  , "retrieve:{0}/final_state/{2}.state\0##TMPDIR##/final.state"
                   ]
 
-    def __init__(self, prevState, aNum=0):
+    def __init__(self, prevState, aNum):
+        if aNum == 0:
+            self.commandlist = [ self.commandlist[i] for i in (0, 1, 2) ]
+
         super(DumpSSIMRetrieveState, self).__init__(prevState, aNum)
+
         vName = ServerInfo.video_name
-        pStr = "%08d" % (self.actorNum + ServerInfo.num_offset)
-        if self.actorNum == 0:
-            del self.commands[-1]
-            del self.expects[-1]
-        self.commands = [ s.format(vName, pStr) if s is not None else None for s in self.commands ]
+        pNum = self.actorNum + ServerInfo.num_offset
+        pStr = "%08d" % pNum
+        prStr = "%08d" % (pNum - 1)
+        self.commands = [ s.format(vName, pStr, prStr) if s is not None else None for s in self.commands ]
 
 def run():
     server.server_main_loop([], DumpSSIMRetrieveState, ServerInfo)

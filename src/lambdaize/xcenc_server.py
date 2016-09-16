@@ -6,6 +6,7 @@ from libmu import util, server, TerminalState, CommandListState, SuperpositionSt
 
 class ServerInfo(object):
     states = []
+    host_addr = None
     port_number = 13579
 
     state_srv_addr = '127.0.0.1'
@@ -83,21 +84,33 @@ class XCEncComputeSSIMState(CommandListState):
         iState = self.info['decode_input_state']
         self.commands = [ s.format(vName, pStr, qStr, qnStr, iState) if s is not None else None for s in self.commands ]
 
+class XCEncQuitState(OnePassState):
+    extra = "(sending quit command)"
+    command = "quit:"
+    expect = None
+    nextState = FinalState
+
 class XCEncFinishState(CommandListState):
     extra = "(uploading comparison data and quitting command)"
     pipelined = True
     # NOTE it's OK to pipeline this because we'll get three "UPLOAD(" responses in *some* order
     #      if bg_silent were false, we'd have to use a SuperpositionState to run the uploads in parallel
     nextState = FinalState
-    commandlist = [ (None, "upload:{0}/comp_txt/{1}.txt\0##TMPDIR##/comp.txt")
+    commandlist = [ (None, "upload:{0}/final_state/{1}.state\0##TMPDIR##/final.state")
                   , ("OK:UPLOAD(", "upload:{0}/prev_state/{1}.state\0##TMPDIR##/prev.state")
-                  , ("OK:UPLOAD(", "upload:{0}/final_state/{1}.state\0##TMPDIR##/final.state")
+                  , ("OK:UPLOAD(", "upload:{0}/comp_txt/{1}.txt\0##TMPDIR##/comp.txt")
                   , ("OK:UPLOAD(", None)
                   ]
 
     def __init__(self, prevState, aNum=0):
+        if not ServerInfo.upload_states:
+            self.commandlist = [ (None, "quit:") ]
+        elif prevState.actorNum == 0:
+            self.commandlist = [ self.commandlist[i] for i in (0, 3) ]
+
         super(XCEncFinishState, self).__init__(prevState, aNum)
-        if self.actorNum > 0 and ServerInfo.upload_states:
+
+        if ServerInfo.upload_states:
             pStr = "%08d" % (self.actorNum + ServerInfo.num_offset)
             vName = ServerInfo.video_name
             self.commands = [ s.format(vName, pStr) if s is not None else None for s in self.commands ]
@@ -108,11 +121,8 @@ class XCEncFinishState(CommandListState):
                 self.info['ssim_quality_string'] = "--y-ac-qi=%d" % ServerInfo.quality_y
                 self.info['ssim_quality_key'] = "%d_final" % ServerInfo.quality_y
                 self.info['decode_input_state'] = "\"##TMPDIR##/prev.state\""
-        else:
-            # actor #0 has nothing to upload because it never compares
-            self.commands[0] = "quit:"
-            del self.commands[1:]
-            del self.expects[1:]
+            else:
+                self.nextState = XCEncQuitState
 
 class XCEncCheckConvergedState(OnePassState):
     extra = "(checking result of comparison)"
@@ -211,7 +221,6 @@ class XCEncRunState(CommandListState):
             qstring = "--refine-sw"
             if pass_num == ServerInfo.tot_passes - 1:
                 qstring += " --fix-prob-tables"
-                assert self.info['have_reencoded']
 
         if self.info['need_reencode']:
             qstring += " --reencode-first-frame"
@@ -273,7 +282,7 @@ def main():
     # launch the lambdas
     event = { "mode": 1
             , "port": ServerInfo.port_number
-            , "addr": None  # server_launch will fill this in for us
+            , "addr": ServerInfo.host_addr
             , "nonblock": 1
             , "bg_silent": 1
             , "cacert": ServerInfo.cacert

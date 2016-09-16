@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import cProfile
+import datetime
 import getopt
 import json
 import os
@@ -114,19 +115,21 @@ def server_main_loop(states, constructor, server_info):
     poll_obj = select.poll()
     poll_obj.register(lsock_fd, select.POLLIN)
     npasses_out = 0
+    start_time = time.time()
 
     def show_status():
         actStates = len([ 1 for v in rwflags if v != 0 ])
         errStates = len([ 1 for s in states if isinstance(s, libmu.machine_state.ErrorState) ])
         doneStates = len([ 1 for s in states if isinstance(s, libmu.machine_state.TerminalState) ]) - errStates
         waitStates = server_info.num_parts - len(states)
+        runTime = str(datetime.timedelta(seconds=time.time() - start_time))
 
         # enhanced output in debugging mode
         #if libmu.defs.Defs.debug:
         for s in states:
             print "    %s" % str(s)
 
-        print "SERVER status: active=%d, done=%d, prelaunch=%d, error=%d" % (actStates, doneStates, waitStates, errStates)
+        print "SERVER status (%s): active=%d, done=%d, prelaunch=%d, error=%d" % (runTime, actStates, doneStates, waitStates, errStates)
 
     while True:
         dflags = rwsplit(states, rwflags)
@@ -226,9 +229,9 @@ def usage_str(defaults):
 
     uStr += "  switch         description                                     default\n"
     uStr += "  --             --                                              --\n"
-    uStr += "  -h:            show this message\n"
+    uStr += "  -U:            show this message\n"
     uStr += "  -D:            enable debug                                    (disabled)\n"
-    oStr += "hD"
+    oStr += "UD"
 
     if hasattr(defaults, 'out_file'):
         oFileStr = "'%s'" % defaults.out_file if defaults.out_file is not None else "None"
@@ -298,6 +301,10 @@ def usage_str(defaults):
     if hasattr(defaults, 'in_format'):
         uStr += "  -i inFormat:   input format ('png16', 'y4m_06', etc)           ('%s')\n" % defaults.in_format
         oStr += "i:"
+
+    if hasattr(defaults, 'host_addr'):
+        uStr += "  -h hostAddr:   this server's address                           (auto)\n"
+        oStr += "h:"
 
     uStr += "\n  -t portNum:    listen on portNum                               (%d)\n" % defaults.port_number
     oStr += "t:"
@@ -383,7 +390,7 @@ def options(server_info):
             server_info.bucket = arg
         elif opt == "-i":
             server_info.in_format = arg
-        elif opt == "-h":
+        elif opt == "-U":
             print uStr
             sys.exit(1)
         elif opt == "-O":
@@ -417,6 +424,8 @@ def options(server_info):
             assert len(server_info.num_list) > 0
         elif opt == "-t":
             server_info.port_number = int(arg)
+        elif opt == "-h":
+            server_info.host_addr = arg
         elif opt == "-q":
             to_numlist(arg, server_info.quality_values)
             server_info.quality_valstring = '_'.join([ str(x) for x in server_info.quality_values ])
