@@ -450,7 +450,8 @@ def options(server_info):
         print uStr
         sys.exit(1)
 
-    assert server_info.num_passes[1] == 0, "Phase two is not supported. You must set it to zero!"
+    if hasattr(server_info, 'num_passes'):
+        assert server_info.num_passes[1] == 0, "Phase two is not supported. You must set it to zero!"
 
     for f in [cacertfile, srvcrtfile, srvkeyfile]:
         try:
