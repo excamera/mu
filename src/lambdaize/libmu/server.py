@@ -135,8 +135,8 @@ def server_main_loop(states, constructor, server_info):
 
         # enhanced output in debugging mode
         #if libmu.defs.Defs.debug:
-        sys.stdout.write("\033[3J\033[H\033[2J")
-        sys.stdout.flush()
+        #sys.stdout.write("\033[3J\033[H\033[2J")
+        #sys.stdout.flush()
         n_printed = 0
         for s in states:
             sys.stdout.write(str(s)[:n_chars])
@@ -148,7 +148,7 @@ def server_main_loop(states, constructor, server_info):
                 sys.stdout.write(' ')
         if n_printed != 0:
             sys.stdout.write("\n")
-        sys.stdout.write("SERVER status (%s): active=%d, done=%d, prelaunch=%d, error=%d" % (runTime, actStates, doneStates, waitStates, errStates))
+        sys.stdout.write("SERVER status (%s): active=%d, done=%d, prelaunch=%d, error=%d\n" % (runTime, actStates, doneStates, waitStates, errStates))
         sys.stdout.flush()
 
     while True:
@@ -298,6 +298,10 @@ def usage_str(defaults):
     if hasattr(defaults, 'quality_s'):
         uStr += "  -S s_ac_qi:    use s_ac_qi for Y quantizer                     (%s)\n" % str(defaults.quality_s)
         oStr += "S:"
+
+    if hasattr(defaults, 'keyframe_distance'):
+        uStr += "  -K kfDist:     force keyframe every kfDist chunks              (%s)\n" % str(defaults.keyframe_distance)
+        oStr += "K:"
 
     if hasattr(defaults, 'upload_states'):
         uStr += "  -u:            upload prev.state and final.state               (%s)\n" % str(defaults.upload_states)
@@ -460,6 +464,8 @@ def options(server_info):
             server_info.run_xcenc = True
         elif opt == "-u":
             server_info.upload_states = True
+        elif opt == "-K":
+            server_info.keyframe_distance = int(arg)
         elif opt == "-X":
             server_info.overprovision = int(arg)
         elif opt == "-S":
@@ -469,7 +475,10 @@ def options(server_info):
 
     if hasattr(server_info, 'quality_y') and hasattr(server_info, 'quality_str'):
         qs = getattr(server_info, 'quality_s', None)
-        server_info.quality_str = "%d_%s" % (server_info.quality_y, str(qs) if qs is not None else 'x')
+        qStr = str(qs) if qs is not None else 'x'
+        ks = getattr(server_info, 'keyframe_distance', None)
+        kStr = ('_k%d' % ks) if ks is not None else ''
+        server_info.quality_str = "%d_%s%s" % (server_info.quality_y, qStr, kStr)
 
     if hasattr(server_info, 'regions') and len(server_info.regions) == 0:
         print "ERROR: region list cannot be empty"
@@ -484,7 +493,10 @@ def options(server_info):
         sys.exit(1)
 
     if hasattr(server_info, 'num_passes'):
-        assert server_info.num_passes[1] == 0, "Phase two is not supported. You must set it to zero!"
+        if getattr(server_info, 'keyframe_distance', None):
+            server_info.num_passes = (1, server_info.keyframe_distance, 0, 0)
+        else:
+            assert server_info.num_passes[1] == 0, "In swframe mode, phase two is not supported."
 
     for f in [cacertfile, srvcrtfile, srvkeyfile]:
         try:

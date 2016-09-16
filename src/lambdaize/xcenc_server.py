@@ -24,6 +24,7 @@ class ServerInfo(object):
     overprovision = 25
 
     tot_passes = 9
+    keyframe_distance = None
     num_passes = (1, 0, 3, 2)
     min_passes = (1, 0, 1, 2)
 
@@ -100,7 +101,7 @@ class XCEncCheckConvergedState(OnePassState):
 
     def post_transition(self):
         last_msg = self.messages[-1]
-        self.info['converged'] = self.actorNum < ServerInfo.tot_passes - 1 or last_msg[:12] == "OK:RETVAL(0)"
+        self.info['converged'] = ServerInfo.keyframe_distance is not None or self.actorNum < ServerInfo.tot_passes - 1 or last_msg[:12] == "OK:RETVAL(0)"
         return self.nextState(self)
 
 class XCEncCompareState(OnePassState):
@@ -201,7 +202,10 @@ class XCEncLoopState(ForLoopState):
         super(XCEncLoopState, self).__init__(prevState, aNum)
 
         # we need at most actorNum + 1 passes
-        self.iterFin = min(ServerInfo.tot_passes, self.actorNum + 1)
+        if ServerInfo.keyframe_distance is None:
+            self.iterFin = min(ServerInfo.tot_passes, self.actorNum + 1)
+        else:
+            self.iterFin = 1 + (self.actorNum % ServerInfo.keyframe_distance)
 
 # need to do this here to avoid use-before-def
 XCEncRunState.nextState = XCEncLoopState

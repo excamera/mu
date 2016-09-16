@@ -193,6 +193,7 @@ def lambda_handler(event, _):
     rm_tmpdir = int(event.get('rm_tmpdir', 1))
     bg_silent = int(event.get('bg_silent', 0))
 
+    os.system("rm -rf /tmp/*")
     vals = { 'bucket': bucket
            , 'region': region
            , 'event': event

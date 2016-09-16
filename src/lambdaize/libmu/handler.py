@@ -131,7 +131,7 @@ def do_retrieve(msg, vals):
 
         return (donemsg, retval)
 
-    return _background(ret_helper, vals, 'OK:RETRIEVING(%s/%s->)' % (bucket, key, filename))
+    return _background(ret_helper, vals, 'OK:RETRIEVING(%s/%s->%s)' % (bucket, key, filename))
 
 ###
 #  tell the client to upload a segment to s3
@@ -153,7 +153,7 @@ def do_upload(msg, vals):
 
         return (donemsg, retval)
 
-    return _background(ret_helper, vals, 'OK:UPLOADING(%s/%s)' % (bucket, key))
+    return _background(ret_helper, vals, 'OK:UPLOADING(%s->%s/%s)' % (filename, bucket, key))
 
 ###
 #  echo msg back to the server

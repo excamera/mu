@@ -11,6 +11,7 @@ class ServerInfo(object):
     quality_y = 30
     quality_s = None
     quality_str = "30_x"
+    keyframe_distance = None
 
     video_name = "sintel-1k-y4m_06"
     num_offset = 0
