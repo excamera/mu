@@ -96,9 +96,9 @@ class XCEncFinishState(CommandListState):
     # NOTE it's OK to pipeline this because we'll get three "UPLOAD(" responses in *some* order
     #      if bg_silent were false, we'd have to use a SuperpositionState to run the uploads in parallel
     nextState = FinalState
-    commandlist = [ (None, "upload:{0}/final_state/{1}.state\0##TMPDIR##/final.state")
-                  , ("OK:UPLOAD(", "upload:{0}/prev_state/{1}.state\0##TMPDIR##/prev.state")
-                  , ("OK:UPLOAD(", "upload:{0}/comp_txt/{1}.txt\0##TMPDIR##/comp.txt")
+    commandlist = [ (None, "upload:{0}/final_state_{2}/{1}.state\0##TMPDIR##/final.state")
+                  , ("OK:UPLOAD(", "upload:{0}/prev_state_{2}/{1}.state\0##TMPDIR##/prev.state")
+                  , ("OK:UPLOAD(", "upload:{0}/comp_txt_{2}/{1}.txt\0##TMPDIR##/comp.txt")
                   , ("OK:UPLOAD(", None)
                   ]
 
@@ -113,13 +113,14 @@ class XCEncFinishState(CommandListState):
         if ServerInfo.upload_states:
             pStr = "%08d" % (self.actorNum + ServerInfo.num_offset)
             vName = ServerInfo.video_name
-            self.commands = [ s.format(vName, pStr) if s is not None else None for s in self.commands ]
+            qNum = ServerInfo.quality_y
+            self.commands = [ s.format(vName, pStr, qNum) if s is not None else None for s in self.commands ]
 
             if ServerInfo.run_ssim:
                 self.nextState = XCEncComputeSSIMState
                 self.info['after_ssim_state'] = FinalState
                 self.info['ssim_quality_string'] = "--y-ac-qi=%d" % ServerInfo.quality_y
-                self.info['ssim_quality_key'] = "%d_final" % ServerInfo.quality_y
+                self.info['ssim_quality_key'] = "final_%d" % ServerInfo.quality_y
                 self.info['decode_input_state'] = "\"##TMPDIR##/prev.state\""
             else:
                 self.nextState = XCEncQuitState
@@ -145,8 +146,7 @@ class XCEncUploadState(CommandListState):
     extra = "(uploading result)"
     nextState = TerminalState
     keyString = "out"
-    thenState = None
-    commandlist = [ (None, "upload:{0}/{2}/{1}.ivf\0##TMPDIR##/output.ivf")
+    commandlist = [ (None, "upload:{0}/{2}_{3}/{1}.ivf\0##TMPDIR##/output.ivf")
                   , ("OK:UPLOAD(", None)
                   ]
 
@@ -155,8 +155,8 @@ class XCEncUploadState(CommandListState):
         vName = ServerInfo.video_name
         pStr = "%08d" % (self.actorNum + ServerInfo.num_offset)
         kStr = self.keyString
-        self.info[''] = self.thenState
-        self.commands = [ s.format(vName, pStr, kStr) if s is not None else None for s in self.commands ]
+        qNum = ServerInfo.quality_y
+        self.commands = [ s.format(vName, pStr, kStr, qNum) if s is not None else None for s in self.commands ]
 
 class XCEncUploadAndCompare(SuperpositionState):
     nextState = XCEncFinishState
@@ -165,6 +165,7 @@ class XCEncUploadAndCompare(SuperpositionState):
 class XCEncUploadFirstIVFState(XCEncUploadState):
     extra = "(uploading first IVF output)"
     keyString = "first"
+    thenState = None
 
     def __init__(self, prevState, aNum=0):
         super(XCEncUploadFirstIVFState, self).__init__(prevState, aNum)
@@ -172,7 +173,7 @@ class XCEncUploadFirstIVFState(XCEncUploadState):
             self.nextState = XCEncComputeSSIMState
             self.info['after_ssim_state'] = self.thenState
             self.info['ssim_quality_string'] = "--y-ac-qi=%d" % ServerInfo.quality_y
-            self.info['ssim_quality_key'] = "%d_first" % ServerInfo.quality_y
+            self.info['ssim_quality_key'] = "first_%d" % ServerInfo.quality_y
             self.info['decode_input_state'] = ""
 
 class XCEncDumpState(CommandListState):
