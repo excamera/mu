@@ -9,6 +9,9 @@ class ServerInfo(object):
     port_number = 13579
 
     quality_y = 30
+    quality_s = None
+    quality_str = "30_x"
+
     video_name = "sintel-1k-y4m_06"
     num_offset = 0
     num_parts = 1
@@ -51,8 +54,8 @@ class DumpSSIMState(CommandListState):
             stStr = ""
         else:
             stStr = "\"##TMPDIR##/final.state\""
-        qNum = ServerInfo.quality_y
-        self.commands = [ s.format(vName, pStr, stStr, qNum) if s is not None else None for s in self.commands ]
+        qStr = ServerInfo.quality_str
+        self.commands = [ s.format(vName, pStr, stStr, qStr) if s is not None else None for s in self.commands ]
 
 class DumpSSIMRetrieveState(CommandListState):
     extra = "(retrieving data)"
@@ -75,8 +78,8 @@ class DumpSSIMRetrieveState(CommandListState):
         pNum = self.actorNum + ServerInfo.num_offset
         pStr = "%08d" % pNum
         prStr = "%08d" % (pNum - 1)
-        qNum = ServerInfo.quality_y
-        self.commands = [ s.format(vName, pStr, prStr, qNum) if s is not None else None for s in self.commands ]
+        qStr = ServerInfo.quality_str
+        self.commands = [ s.format(vName, pStr, prStr, qStr) if s is not None else None for s in self.commands ]
 
 def run():
     server.server_main_loop([], DumpSSIMRetrieveState, ServerInfo)

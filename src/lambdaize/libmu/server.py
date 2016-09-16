@@ -296,8 +296,8 @@ def usage_str(defaults):
         oStr += "Y:"
 
     if hasattr(defaults, 'run_ssim'):
-        uStr += "  -S:            compute SSIM of chunk (4k takes a long time!)   (%s)\n" % str(defaults.run_ssim)
-        oStr += "S"
+        uStr += "  -S s_ac_qi:    use s_ac_qi for Y quantizer                     (%s)\n" % str(defaults.quality_s)
+        oStr += "S:"
 
     if hasattr(defaults, 'upload_states'):
         uStr += "  -u:            upload prev.state and final.state               (%s)\n" % str(defaults.upload_states)
@@ -463,9 +463,13 @@ def options(server_info):
         elif opt == "-X":
             server_info.overprovision = int(arg)
         elif opt == "-S":
-            server_info.run_ssim = True
+            server_info.quality_s = int(arg)
         else:
             assert False, "logic error: got unexpected option %s from getopt" % opt
+
+    if hasattr(server_info, 'quality_y') and hasattr(server_info, 'quality_str'):
+        qs = getattr(server_info, 'quality_s', None)
+        server_info.quality_str = "%d_%s" % (server_info.quality_y, str(qs) if qs is not None else 'x')
 
     if hasattr(server_info, 'regions') and len(server_info.regions) == 0:
         print "ERROR: region list cannot be empty"
