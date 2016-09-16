@@ -167,6 +167,7 @@ class XCEncRunState(CommandListState):
         else:
             cmdstring = ServerInfo.xcenc_invocation
 
+        qstring = ""
         if pass_num < ServerInfo.num_passes[0]:
             qstring = str(ServerInfo.quality_y)
 
