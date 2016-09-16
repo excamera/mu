@@ -5,6 +5,7 @@ import os
 from libmu import server, TerminalState, CommandListState
 
 class ServerInfo(object):
+    host_addr = None
     port_number = 13579
 
     video_name = "sintel-1k-y4m_06"
@@ -83,7 +84,7 @@ def main():
     # launch the lambdas
     event = { "mode": 1
             , "port": ServerInfo.port_number
-            , "addr": None  # server_launch will fill this in for us
+            , "addr": ServerInfo.host_addr
             , "nonblock": 1
             , "bg_silent": 1
             , "cacert": ServerInfo.cacert
