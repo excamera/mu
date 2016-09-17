@@ -134,9 +134,10 @@ def server_main_loop(states, constructor, server_info):
         runTime = str(datetime.timedelta(seconds=time.time() - start_time))
 
         # enhanced output in debugging mode
-        #if libmu.defs.Defs.debug:
-        #sys.stdout.write("\033[3J\033[H\033[2J")
-        #sys.stdout.flush()
+        if errStates == 0:
+            # make output pretty as long as there aren't errors
+            sys.stdout.write("\033[3J\033[H\033[2J")
+            sys.stdout.flush()
         n_printed = 0
         for s in states:
             s_str = str(s)
