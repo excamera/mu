@@ -2,7 +2,7 @@
 
 import os
 
-from libmu import util, server, TerminalState, CommandListState, SuperpositionState, ForLoopState, OnePassState, ErrorState
+from libmu import util, server, TerminalState, CommandListState, ForLoopState, OnePassState, ErrorState
 
 class ServerInfo(object):
     states = []
@@ -72,7 +72,8 @@ class XCEncFinishState(CommandListState):
     # NOTE it's OK to pipeline this because we'll get three "UPLOAD(" responses in *some* order
     #      if bg_silent were false, we'd have to use a SuperpositionState to run the uploads in parallel
     nextState = FinalState
-    commandlist = [ (None, "upload:{0}/final_state_{2}/{1}.state\0##TMPDIR##/final.state")
+    commandlist = [ (None, "upload:{0}/out_{2}/{1}.ivf\0##TMPDIR##/output.ivf")
+                  , ("OK:UPLOAD(", "upload:{0}/final_state_{2}/{1}.state\0##TMPDIR##/final.state")
                   , ("OK:UPLOAD(", "upload:{0}/prev_state_{2}/{1}.state\0##TMPDIR##/prev.state")
                   , ("OK:UPLOAD(", "upload:{0}/comp_txt_{2}/{1}.txt\0##TMPDIR##/comp.txt")
                   , ("OK:UPLOAD(", None)
@@ -97,11 +98,11 @@ class XCEncCheckConvergedState(OnePassState):
     extra = "(converged?)"
     command = None
     expect = "OK:RETVAL("
-    nextState = TerminalState
+    nextState = XCEncFinishState
 
     def post_transition(self):
         last_msg = self.messages[-1]
-        self.info['converged'] = ServerInfo.keyframe_distance is not None or self.actorNum < ServerInfo.tot_passes - 1 or last_msg[:12] == "OK:RETVAL(0)"
+        self.info['converged'] = self.actorNum < ServerInfo.tot_passes - 1 or last_msg[:12] == "OK:RETVAL(0)"
         return self.nextState(self)
 
 class XCEncCompareState(OnePassState):
@@ -110,30 +111,19 @@ class XCEncCompareState(OnePassState):
     command = "run:test ! -f \"##TMPDIR##/prev.state\" || ./comp-states \"##TMPDIR##/prev.state\" \"##TMPDIR##/final.state\" >> \"##TMPDIR##\"/comp.txt"
     nextState = XCEncCheckConvergedState
 
-class XCEncUploadState(CommandListState):
-    extra = "(u/l output)"
-    nextState = TerminalState
-    keyString = "out"
-    commandlist = [ (None, "upload:{0}/{2}_{3}/{1}.ivf\0##TMPDIR##/output.ivf")
+class XCEncUploadFirstIVFState(CommandListState):
+    extra = "(u/l first)"
+    nextState = None
+    commandlist = [ (None, "upload:{0}/first_{3}/{1}.ivf\0##TMPDIR##/output.ivf")
                   , ("OK:UPLOAD(", None)
                   ]
 
     def __init__(self, prevState, aNum=0):
-        super(XCEncUploadState, self).__init__(prevState, aNum)
+        super(XCEncUploadFirstIVFState, self).__init__(prevState, aNum)
         vName = ServerInfo.video_name
         pStr = "%08d" % (self.actorNum + ServerInfo.num_offset)
-        kStr = self.keyString
         qStr = ServerInfo.quality_str
-        self.commands = [ s.format(vName, pStr, kStr, qStr) if s is not None else None for s in self.commands ]
-
-class XCEncUploadAndCompare(SuperpositionState):
-    nextState = XCEncFinishState
-    state_constructors = [XCEncUploadState, XCEncCompareState]
-
-class XCEncUploadFirstIVFState(XCEncUploadState):
-    extra = "(u/l first)"
-    keyString = "first"
-    thenState = None
+        self.commands = [ s.format(vName, pStr, qStr) if s is not None else None for s in self.commands ]
 
 class XCEncDumpState(CommandListState):
     extra = "(xc-dump)"
@@ -211,7 +201,7 @@ class XCEncRunState(CommandListState):
 class XCEncLoopState(ForLoopState):
     extra = "(encode)"
     loopState = XCEncRunState
-    exitState = XCEncUploadAndCompare
+    exitState = XCEncCompareState
 
     def __init__(self, prevState, aNum=0):
         super(XCEncLoopState, self).__init__(prevState, aNum)
@@ -221,11 +211,12 @@ class XCEncLoopState(ForLoopState):
             self.iterFin = min(ServerInfo.tot_passes, self.actorNum + 1)
         else:
             self.iterFin = min(3, 1 + (self.actorNum % ServerInfo.keyframe_distance))
+            self.exitState = XCEncFinishState
+            self.info['converged'] = True
 
 # need to do this here to avoid use-before-def
 XCEncRunState.nextState = XCEncLoopState
 XCEncDumpState.nextState = XCEncLoopState
-XCEncUploadFirstIVFState.thenState = XCEncLoopState
 XCEncUploadFirstIVFState.nextState = XCEncLoopState
 
 class XCEncSettingsState(CommandListState):
