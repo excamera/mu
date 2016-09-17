@@ -266,9 +266,11 @@ def server_main_loop(states, constructor, server_info):
         if isinstance(state, libmu.machine_state.ErrorState) or not isinstance(state, libmu.machine_state.TerminalState):
             error.append(num)
             errvals.append(repr(state))
-        elif fo is not None:
-            timestamps = [ ts - server_info.start_time for ts in state.get_timestamps() ]
-            fo.write("%d:%s\n" % (state.actorNum, str(timestamps)))
+
+        if fo is not None:
+            timestamps = [ ts - server_info.start_time for ts in state.timestamps ]
+            tslog = zip(timestamps, state.stateinfo)
+            fo.write("%d:%s\n" % (state.actorNum, str(tslog)))
 
     if server_info.profiling:
         pr.disable()

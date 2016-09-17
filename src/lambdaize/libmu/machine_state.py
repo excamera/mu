@@ -33,9 +33,6 @@ class MachineState(SocketNB):
         self.timestamps.append(time.time())
         self.stateinfo.append(self.__class__.__name__)
 
-    def get_timestamps(self):
-        return self.timestamps
-
     def __repr__(self):
         return "%s: %s" % (type(self), str(self))
 
