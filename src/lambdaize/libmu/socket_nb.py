@@ -144,11 +144,16 @@ class SocketNB(object):
         return ret
 
     def _fill_send_buf(self):
-        if self.send_buf is None:
-            if self.ssl_write is True:
-                self.send_buf = ''
-            elif len(self.send_queue) > 0:
-                self.send_buf = self.send_queue.popleft()
+        self.send_buf = '' if self.send_buf is None else self.send_buf
+        if self.ssl_write is True:
+            return
+
+        # if we have multiple messages enqueued, put them all in the buffer
+        while len(self.send_queue) > 0:
+            self.send_buf += self.send_queue.popleft()
+
+        if len(self.send_buf) == 0:
+            self.send_buf = None
 
     def _send_raw(self):
         while True:

@@ -18,6 +18,7 @@ class MachineState(SocketNB):
             self.prevState = prevState
             self.actorNum = prevState.actorNum
             self.timestamps = prevState.timestamps
+            self.stateinfo = prevState.stateinfo
             self.info = prevState.info
 
         else:
@@ -25,10 +26,12 @@ class MachineState(SocketNB):
             self.prevState = None
             self.actorNum = actorNum
             self.timestamps = []
+            self.stateinfo = []
             self.info = {}
 
         self.messages = []
         self.timestamps.append(time.time())
+        self.stateinfo.append(self.__class__.__name__)
 
     def get_timestamps(self):
         return self.timestamps
@@ -180,23 +183,22 @@ class MultiPassState(MachineState):
     def transition(self, msg):
         if self.cmdNum >= len(self.commands) or msg[:len(self.expects[self.cmdNum])] != self.expects[self.cmdNum]:
             return ErrorState(self, msg)
-
-        # send message and transition
-        command = self.commands[self.cmdNum]
-        self.cmdNum += 1
-        if command is not None:
-            self.enqueue(command)
-
         self.messages.append(msg)
 
-        if self.cmdNum >= len(self.commands):
-            return self.nextState(self)
+        # enqueue as many further commands as we can
+        send_next_message = True
+        while send_next_message:
+            command = self.commands[self.cmdNum]
+            self.cmdNum += 1
 
-        if self.expects[self.cmdNum] is None:
-            self.expects[self.cmdNum] = libmu.util.rand_str(32)
-            self.kick()
+            if command is not None:
+                self.enqueue(command)
 
-        self.timestamps.append(time.time())
+            if self.cmdNum >= len(self.commands):
+                return self.nextState(self)
+
+            send_next_message = self.expects[self.cmdNum] is None
+
         return self
 
     def kick(self):
