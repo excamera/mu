@@ -140,11 +140,7 @@ class XCEncDumpState(CommandListState):
 class XCEncRunState(CommandListState):
     extra = "(encode)"
     pipelined = False
-    commandlist = [ (None, "seti:run_iter:{0}")
-                  , "set:cmdquality:{1}"
-                  , "seti:send_statefile:{3}"
-                  , "run:test ! -f \"##TMPDIR##/final.state\" || cp \"##TMPDIR##/final.state\" \"##TMPDIR##/prev.state\""
-                  , ("OK:RETVAL(0)", "run:{2}")
+    commandlist = [ ("OK:RETVAL(0)", "run:{0}")
                   , ("OK:RETVAL(0)", None)
                   ]
 
@@ -155,12 +151,32 @@ class XCEncRunState(CommandListState):
         if pass_num == 0:
             self.nextState = XCEncDumpState
             cmdstring = ServerInfo.vpxenc_invocation
-            self.info['need_reencode'] = False
         else:
             cmdstring = ServerInfo.xcenc_invocation
 
-        qstring = ""
+        self.commands = [ s.format(cmdstring) if s is not None else None for s in self.commands ]
+
+    def str_extra(self):
+        xstr = super(XCEncRunState, self).str_extra()
+        return "%s/%d" % (xstr, self.info['iter_key'])
+
+class XCEncPreRunState(CommandListState):
+    extra = "(pre-encode)"
+    pipelined = True
+    nextState = XCEncRunState
+    commandlist = [ (None, "seti:run_iter:{0}")
+                  , "set:cmdquality:{1}"
+                  , "seti:send_statefile:{2}"
+                  , "run:test ! -f \"##TMPDIR##/final.state\" || cp \"##TMPDIR##/final.state\" \"##TMPDIR##/prev.state\""
+                  ]
+
+    def __init__(self, prevState, aNum=0):
+        super(XCEncPreRunState, self).__init__(prevState, aNum)
+
+        qstring = ''
+        pass_num = self.info['iter_key']
         if pass_num < ServerInfo.num_passes[0]:
+            self.info['need_reencode'] = False
             qstring = str(ServerInfo.quality_y)
 
         elif pass_num < sum(ServerInfo.num_passes[:2]):
@@ -192,15 +208,11 @@ class XCEncRunState(CommandListState):
         if pass_num == 1 and effective_actor_number != 1:
             send_statefile = 0
 
-        self.commands = [ s.format(tell_pass_num, qstring, cmdstring, send_statefile) if s is not None else None for s in self.commands ]
-
-    def str_extra(self):
-        xstr = super(XCEncRunState, self).str_extra()
-        return "%s(%d)" % (xstr, self.info['iter_key'])
+        self.commands = [ s.format(tell_pass_num, qstring, send_statefile) if s is not None else None for s in self.commands ]
 
 class XCEncLoopState(ForLoopState):
     extra = "(encode)"
-    loopState = XCEncRunState
+    loopState = XCEncPreRunState
     exitState = XCEncCompareState
 
     def __init__(self, prevState, aNum=0):
