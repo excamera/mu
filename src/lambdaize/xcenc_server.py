@@ -115,7 +115,7 @@ class XCEncCompareState(OnePassState):
 class XCEncUploadFirstIVFState(CommandListState):
     extra = "(u/l first)"
     nextState = None
-    commandlist = [ (None, "upload:{0}/first_{3}/{1}.ivf\0##TMPDIR##/output.ivf")
+    commandlist = [ (None, "upload:{0}/first_{2}/{1}.ivf\0##TMPDIR##/output.ivf")
                   , ("OK:UPLOAD(", None)
                   ]
 
