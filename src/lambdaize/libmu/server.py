@@ -33,10 +33,11 @@ def _handle_server_sock(ls, states, state_fd_map, state_actNum_map, server_info,
         actor_number = this_actor
         group_number = None
 
-    nstate = constructor(ns, actor_number)
+    if hasattr(server_info, 'state_srv_threads') and group_number is not None:
+        nstate = constructor(ns, actor_number, group_number)
+    else:
+        nstate = constructor(ns, actor_number)
     nstate.do_handshake()
-    if hasattr(nstate, 'info') and group_number is not None:
-        nstate.info['actor_group_number'] = group_number
 
     states.append(nstate)
     state_fd_map[nstate.fileno()] = this_actor
@@ -387,6 +388,10 @@ def usage_str(defaults):
         uStr += "  -T stHostPort: port number for nat punching host               (%s)\n" % defaults.state_srv_port
         oStr += "T:"
 
+    if hasattr(defaults, 'state_srv_threads'):
+        uStr += "  -R nThreads:   state server runs nThreads on sequential ports  (%d)\n" % defaults.state_srv_threads
+        oStr += "R:"
+
     if hasattr(defaults, 'lambda_function'):
         uStr += "  -l fnName:     lambda function name                            ('%s')\n" % defaults.lambda_function
         oStr += "l:"
@@ -506,6 +511,8 @@ def options(server_info):
             server_info.state_srv_addr = arg
         elif opt == "-T":
             server_info.state_srv_port = int(arg)
+        elif opt == "-R":
+            server_info.state_srv_threads = int(arg)
         elif opt == "-x":
             server_info.run_xcenc = True
         elif opt == "-u":

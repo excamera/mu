@@ -11,6 +11,7 @@ class ServerInfo(object):
 
     state_srv_addr = '127.0.0.1'
     state_srv_port = 13337
+    state_srv_threads = 1
 
     upload_states = False
 
@@ -246,7 +247,7 @@ class XCEncSettingsState(CommandListState):
                   , ("OK:RETRIEVE(", None)
                   ]
 
-    def __init__(self, prevState, aNum=0):
+    def __init__(self, prevState, aNum=0, gNum=0):
         super(XCEncSettingsState, self).__init__(prevState, aNum)
         pNum = self.actorNum + ServerInfo.num_offset
         nNum = pNum + 1
@@ -259,7 +260,8 @@ class XCEncSettingsState(CommandListState):
         if ServerInfo.keyframe_distance is not None:
             self.info['effActNum'] = self.actorNum % ServerInfo.keyframe_distance
 
-        stateAddr = "%s:%d" % (ServerInfo.state_srv_addr, ServerInfo.state_srv_port)
+        port_number = ServerInfo.state_srv_port + (gNum % ServerInfo.state_srv_threads)
+        stateAddr = "%s:%d" % (ServerInfo.state_srv_addr, port_number)
         self.commands = [ s.format(vName, pStr, rStr, nNum, stateAddr) if s is not None else None for s in self.commands ]
 
 def run():
