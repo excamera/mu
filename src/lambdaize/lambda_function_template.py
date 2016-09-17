@@ -134,7 +134,7 @@ def make_cmdstring(msg, vals):
 
         if vals['run_iter'] > 1:
             # goose
-            if vals['minimal_recode']:
+            if vals.get('minimal_recode'):
                 instateswitch += ' -S "##TMPDIR##/0.state"'
             else:
                 instateswitch += ' -S "##TMPDIR##/%d.state"' % (vals['run_iter'] - 2)
@@ -201,6 +201,7 @@ def lambda_handler(event, _):
     send_statefile = int(event.get('send_statefile', 0))
     rm_tmpdir = int(event.get('rm_tmpdir', 1))
     bg_silent = int(event.get('bg_silent', 0))
+    minimal_recode = int(event.get('minimal_recode', 0))
 
     if rm_tmpdir:
         os.system("rm -rf /tmp/*")
@@ -216,6 +217,7 @@ def lambda_handler(event, _):
            , 'send_statefile': send_statefile
            , 'rm_tmpdir': rm_tmpdir
            , 'bg_silent': bg_silent
+           , 'minimal_recode': minimal_recode
            , 'run_iter': 0
            , '_tmpdir': tempfile.mkdtemp(prefix="lambda_", dir="/tmp")
            }

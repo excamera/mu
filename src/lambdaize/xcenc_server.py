@@ -259,6 +259,7 @@ def main():
             , "addr": ServerInfo.host_addr
             , "nonblock": 1
             , "bg_silent": 1
+            , "minimal_recode": 1 if ServerInfo.keyframe_distance is not None else 0
             , "cacert": ServerInfo.cacert
             , "srvcrt": ServerInfo.srvcrt
             , "srvkey": ServerInfo.srvkey
