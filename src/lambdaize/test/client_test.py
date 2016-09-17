@@ -21,6 +21,7 @@ def run_tests(use_mode, use_nonblock, use_silent):
             , 'srvcrt': test.defs.Defs.srvcrt
             , 'srvkey': test.defs.Defs.srvkey
             , 'rm_tmpdir': 0
+            , 'minimal_recode': 1
             }
 
     test.util.run_lambda_function_template(event)
