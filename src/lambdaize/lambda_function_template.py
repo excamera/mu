@@ -132,9 +132,12 @@ def make_cmdstring(msg, vals):
         instatewait = 'while [ ! -f "%s" ]; do sleep 1; done; ' % instatefile
         instateswitch = '-r -I "%s" -p "##TMPDIR##/prev.ivf"' % instatefile
 
-        # flying goose: this state might not exist (intentionally)
-        if vals['run_iter'] > 1 and os.path.isfile(os.path.join(vals['_tmpdir'], "%d.state" % (vals['run_iter'] - 2))):
-            instateswitch += ' -S "##TMPDIR##/%d.state"' % (vals['run_iter'] - 2)
+        if vals['run_iter'] > 1:
+            # goose
+            if vals['minimal_recode']:
+                instateswitch += ' -S "##TMPDIR##/0.state"'
+            else:
+                instateswitch += ' -S "##TMPDIR##/%d.state"' % (vals['run_iter'] - 2)
     else:
         instatewait = ""
         instateswitch = ""
@@ -199,7 +202,9 @@ def lambda_handler(event, _):
     rm_tmpdir = int(event.get('rm_tmpdir', 1))
     bg_silent = int(event.get('bg_silent', 0))
 
-    os.system("rm -rf /tmp/*")
+    if rm_tmpdir:
+        os.system("rm -rf /tmp/*")
+
     vals = { 'bucket': bucket
            , 'region': region
            , 'event': event
