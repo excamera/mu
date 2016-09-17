@@ -139,7 +139,9 @@ def server_main_loop(states, constructor, server_info):
         #sys.stdout.flush()
         n_printed = 0
         for s in states:
-            sys.stdout.write(str(s)[:n_chars])
+            s_str = str(s)
+            sys.stdout.write(s_str[:n_chars])
+            sys.stdout.write(' ' * (n_chars - min(len(s_str), n_chars)))
             n_printed += 1
             if n_printed == n_across:
                 sys.stdout.write('\n')
