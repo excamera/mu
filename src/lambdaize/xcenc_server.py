@@ -198,14 +198,20 @@ class XCEncPreRunState(CommandListState):
         elif pass_num == sum(ServerInfo.num_passes[:2]):
             self.info['need_reencode'] = True
 
-        effective_actor_number = self.actorNum % ServerInfo.keyframe_distance
+        kfDist = ServerInfo.keyframe_distance
+        if kfDist is not None:
+            effActNum = self.info['effActNum']
+        else:
+            effActNum = self.actorNum
+
         tell_pass_num = pass_num
-        if pass_num == 2 and ServerInfo.keyframe_distance is not None:
-            # flying goose!
-            tell_pass_num = effective_actor_number
+        if pass_num == 2 and kfDist is not None:
+            # the amazing flying goose
+            tell_pass_num = effActNum
 
         send_statefile = 1
-        if pass_num == 1 and effective_actor_number != 1:
+        dist_from_end = (kfDist if kfDist is not None else ServerInfo.num_passes) - effActNum
+        if dist_from_end == 1 or (kfDist is not None and pass_num == 1 and effActNum != 1):
             send_statefile = 0
 
         self.commands = [ s.format(tell_pass_num, qstring, send_statefile) if s is not None else None for s in self.commands ]
@@ -222,7 +228,7 @@ class XCEncLoopState(ForLoopState):
         if ServerInfo.keyframe_distance is None:
             self.iterFin = min(ServerInfo.tot_passes, self.actorNum + 1)
         else:
-            self.iterFin = min(3, 1 + (self.actorNum % ServerInfo.keyframe_distance))
+            self.iterFin = min(3, 1 + (self.info['effActNum']))
             self.exitState = XCEncFinishState
             self.info['converged'] = True
 
@@ -235,9 +241,7 @@ class XCEncSettingsState(CommandListState):
     extra = "(setup)"
     nextState = XCEncLoopState
     pipelined = True
-    commandlist = [ ("OK:HELLO", "seti:expect_statefile:{4}")
-                  , "seti:send_statefile:{5}"
-                  , "connect:{6}:HELLO_STATE:{2}:{1}:{3}"
+    commandlist = [ ("OK:HELLO", "connect:{4}:HELLO_STATE:{2}:{1}:{3}")
                   , "retrieve:{0}/{1}.y4m\0##TMPDIR##/input.y4m"
                   , ("OK:RETRIEVE(", None)
                   ]
@@ -251,10 +255,12 @@ class XCEncSettingsState(CommandListState):
         if ServerInfo.client_uniq is None:
             ServerInfo.client_uniq = util.rand_str(16)
         rStr = ServerInfo.client_uniq
-        expS = 1 if self.actorNum != 0 else 0
-        sndS = 1 if self.actorNum != ServerInfo.num_parts - 1 else 0
+
+        if ServerInfo.keyframe_distance is not None:
+            self.info['effActNum'] = self.actorNum % ServerInfo.keyframe_distance
+
         stateAddr = "%s:%d" % (ServerInfo.state_srv_addr, ServerInfo.state_srv_port)
-        self.commands = [ s.format(vName, pStr, rStr, nNum, expS, sndS, stateAddr) if s is not None else None for s in self.commands ]
+        self.commands = [ s.format(vName, pStr, rStr, nNum, stateAddr) if s is not None else None for s in self.commands ]
 
 def run():
     server.server_main_loop(ServerInfo.states, XCEncSettingsState, ServerInfo)
@@ -269,6 +275,7 @@ def main():
             , "nonblock": 1
             , "bg_silent": 1
             , "minimal_recode": 1 if ServerInfo.keyframe_distance is not None else 0
+            , "expect_statefile": 1
             , "cacert": ServerInfo.cacert
             , "srvcrt": ServerInfo.srvcrt
             , "srvkey": ServerInfo.srvkey

@@ -21,19 +21,28 @@ import libmu.util
 ###
 #  handle new connection on server listening socket
 ###
-def _handle_server_sock(ls, states, statemap, num_parts, constructor):
+def _handle_server_sock(ls, states, state_fd_map, state_actNum_map, server_info, constructor):
     (ns, _) = ls.accept()
     ns.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     ns.setblocking(False)
 
-    actor_number = len(states)
+    this_actor = len(states)
+    if getattr(server_info, 'keyframe_distance', None) is not None:
+        (actor_number, group_number, _) = _compute_actor_number(this_actor, server_info.keyframe_distance, server_info.num_parts)
+    else:
+        actor_number = this_actor
+        group_number = None
+
     nstate = constructor(ns, actor_number)
     nstate.do_handshake()
+    if hasattr(nstate, 'info') and group_number is not None:
+        nstate.info['actor_group_number'] = group_number
 
     states.append(nstate)
-    statemap[nstate.fileno()] = actor_number
+    state_fd_map[nstate.fileno()] = this_actor
+    state_actNum_map[actor_number] = this_actor
 
-    if len(states) == num_parts:
+    if len(states) == server_info.num_parts:
         # no need to listen any longer, we have all our connections
         try:
             ls.shutdown()
@@ -44,6 +53,41 @@ def _handle_server_sock(ls, states, statemap, num_parts, constructor):
         ls = None
 
     return ls
+
+###
+#  rotating goose: compute where this actor goes
+###
+def _compute_actor_number(thisAct, kfDist, numParts):
+    rem = numParts % kfDist
+    numGroups = numParts // kfDist + (1 if rem != 0 else 0)
+
+    if rem == 0 or thisAct < numGroups * rem:
+        thisGroup = thisAct % numGroups
+        thisPlace = thisAct // numGroups
+    else:
+        effAct = thisAct - rem * numGroups
+        effGroups = numGroups - 1
+        thisGroup = effAct % effGroups
+        thisPlace = rem + effAct // effGroups
+
+    actorNum = thisGroup * kfDist + thisPlace
+    return (actorNum, thisGroup, thisPlace)
+
+###
+#  test the above function
+###
+def _test_compute(kfDist, numParts):
+    testvec = ['_' * kfDist] * (numParts // kfDist)
+    if numParts % kfDist != 0:
+        testvec += ['_' * (numParts % kfDist)]
+    print str(testvec)
+
+    for i in range(0, numParts):
+        (actorNum, thisGroup, thisPlace) = _compute_actor_number(i, kfDist, numParts)
+        this_string = testvec[thisGroup]
+        this_string = this_string[:thisPlace] + 'x' + this_string[thisPlace + 1:]
+        testvec[thisGroup] = this_string
+        print str(testvec), i, actorNum, thisGroup, thisPlace
 
 ###
 #  server: launch a bunch of lambda instances using pylaunch
@@ -109,7 +153,8 @@ def server_main_loop(states, constructor, server_info):
 
         return diffs
 
-    statemap = {}
+    state_fd_map = {}
+    state_actNum_map = {}
     rwflags = []
     poll_obj = select.poll()
     poll_obj.register(lsock_fd, select.POLLIN)
@@ -134,7 +179,7 @@ def server_main_loop(states, constructor, server_info):
         runTime = str(datetime.timedelta(seconds=time.time() - start_time))
 
         # enhanced output in debugging mode
-        if errStates == 0:
+        if errStates == 0 and not libmu.defs.Defs.debug:
             # make output pretty as long as there aren't errors
             sys.stdout.write("\033[3J\033[H\033[2J")
             sys.stdout.flush()
@@ -181,35 +226,33 @@ def server_main_loop(states, constructor, server_info):
         npasses_out += 1
 
         if len(pfds) == 0:
-            if npasses_out != 0:
-                show_status()
+            show_status()
             continue
 
         # look for readable FDs
         for (fd, ev) in pfds:
             if (ev & select.POLLIN) != 0:
                 if lsock is not None and fd == lsock_fd:
-                    lsock = _handle_server_sock(lsock, states, statemap, server_info.num_parts, constructor)
+                    lsock = _handle_server_sock(lsock, states, state_fd_map, state_actNum_map, server_info, constructor)
 
                 else:
-                    actorNum = statemap[fd]
-                    r = states[actorNum]
+                    stateIdx = state_fd_map[fd]
+                    r = states[stateIdx]
                     rnext = r.do_read()
-                    states[actorNum] = rnext
+                    states[stateIdx] = rnext
 
         for (fd, ev) in pfds:
             if (ev & select.POLLOUT) != 0:
-                # reading might have caused this state to get updated,
-                # so we index into states to be sure we have the freshest version
-                actorNum = statemap[fd]
-                w = states[actorNum]
+                stateIdx = state_fd_map[fd]
+                w = states[stateIdx]
                 wnext = w.do_write()
-                states[actorNum] = wnext
+                states[stateIdx] = wnext
 
         for rnext in [ st for st in states if not isinstance(st, libmu.machine_state.TerminalState) ]:
             if rnext.want_handle:
                 rnext = rnext.do_handle()
-            states[rnext.actorNum] = rnext
+            stateIdx = state_actNum_map[rnext.actorNum]
+            states[stateIdx] = rnext
 
     fo = None
     error = []
