@@ -191,7 +191,16 @@ class XCEncRunState(CommandListState):
         elif pass_num == sum(ServerInfo.num_passes[:2]):
             self.info['need_reencode'] = True
 
-        self.commands = [ s.format(self.info['iter_key'], qstring, cmdstring) if s is not None else None for s in self.commands ]
+        tell_pass_num = pass_num
+        if pass_num == 2 and ServerInfo.keyframe_distance is not None:
+            # flying goose!
+            tell_pass_num = self.actorNum % ServerInfo.keyframe_distance
+
+        self.commands = [ s.format(tell_pass_num, qstring, cmdstring) if s is not None else None for s in self.commands ]
+
+    def str_extra(self):
+        xstr = super(XCEncRunState, self).str_extra()
+        return "%s(%d)" % (xstr, self.info['iter_key'])
 
 class XCEncLoopState(ForLoopState):
     extra = "(encode)"
@@ -205,7 +214,7 @@ class XCEncLoopState(ForLoopState):
         if ServerInfo.keyframe_distance is None:
             self.iterFin = min(ServerInfo.tot_passes, self.actorNum + 1)
         else:
-            self.iterFin = 1 + (self.actorNum % ServerInfo.keyframe_distance)
+            self.iterFin = min(3, 1 + (self.actorNum % ServerInfo.keyframe_distance))
 
 # need to do this here to avoid use-before-def
 XCEncRunState.nextState = XCEncLoopState

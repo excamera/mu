@@ -22,7 +22,11 @@ def finished_run(msg, vals):
 
     # we can delete $(($j - 2)).state now
     if vals['run_iter'] > 1:
-        os.unlink("%s/%d.state" % (vals['_tmpdir'], vals['run_iter'] - 2))
+        try:
+            os.unlink("%s/%d.state" % (vals['_tmpdir'], vals['run_iter'] - 2))
+        except:
+            # if the file didn't exist (because of flying goose) that's OK
+            pass
 
     # preserve previous encoding result
     shutil.copy(vals['_tmpdir'] + "/output.ivf", vals['_tmpdir'] + "/prev.ivf")
@@ -127,7 +131,9 @@ def make_cmdstring(msg, vals):
         instatefile = "##TMPDIR##/%d.state" % (vals['run_iter'] - 1)
         instatewait = 'while [ ! -f "%s" ]; do sleep 1; done; ' % instatefile
         instateswitch = '-r -I "%s" -p "##TMPDIR##/prev.ivf"' % instatefile
-        if vals['run_iter'] > 1:
+
+        # flying goose: this state might not exist (intentionally)
+        if vals['run_iter'] > 1 and os.path.isfile(os.path.join(vals['_tmpdir'], "%d.state" % (vals['run_iter'] - 2))):
             instateswitch += ' -S "##TMPDIR##/%d.state"' % (vals['run_iter'] - 2)
     else:
         instatewait = ""
