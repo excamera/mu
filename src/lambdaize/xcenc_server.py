@@ -152,6 +152,7 @@ class XCEncRunState(CommandListState):
     pipelined = False
     commandlist = [ (None, "seti:run_iter:{0}")
                   , "set:cmdquality:{1}"
+                  , "seti:send_statefile:{3}"
                   , "run:test ! -f \"##TMPDIR##/final.state\" || cp \"##TMPDIR##/final.state\" \"##TMPDIR##/prev.state\""
                   , ("OK:RETVAL(0)", "run:{2}")
                   , ("OK:RETVAL(0)", None)
@@ -191,12 +192,17 @@ class XCEncRunState(CommandListState):
         elif pass_num == sum(ServerInfo.num_passes[:2]):
             self.info['need_reencode'] = True
 
+        effective_actor_number = self.actorNum % ServerInfo.keyframe_distance
         tell_pass_num = pass_num
         if pass_num == 2 and ServerInfo.keyframe_distance is not None:
             # flying goose!
-            tell_pass_num = self.actorNum % ServerInfo.keyframe_distance
+            tell_pass_num = effective_actor_number
 
-        self.commands = [ s.format(tell_pass_num, qstring, cmdstring) if s is not None else None for s in self.commands ]
+        send_statefile = 1
+        if pass_num == 1 and effective_actor_number != 1:
+            send_statefile = 0
+
+        self.commands = [ s.format(tell_pass_num, qstring, cmdstring, send_statefile) if s is not None else None for s in self.commands ]
 
     def str_extra(self):
         xstr = super(XCEncRunState, self).str_extra()
