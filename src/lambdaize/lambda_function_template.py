@@ -1,6 +1,5 @@
 #!/usr/bin/python
 
-import base64
 import os
 import select
 import shutil
@@ -37,7 +36,7 @@ def finished_run(msg, vals):
 
     # send output state to next worker
     with open(vals['_tmpdir'] + "/final.state", 'r') as f:
-        indata = ("STATE(%d):" % vals['run_iter']) + base64.b64encode(zlib.compress(f.read()))
+        indata = ("STATE(%d):" % vals['run_iter']) + zlib.compress(f.read())
 
     vals['stsock'].enqueue(indata)
 
@@ -57,7 +56,7 @@ def get_input_state(vals):
     statenum = int(msg[lind:rind])
 
     with open(vals['_tmpdir'] + "/temp.state", 'w') as f:
-        f.write(zlib.decompress(base64.b64decode(data)))
+        f.write(zlib.decompress(data))
 
     # NOTE we write to a tmpfile and rename because renaming is atomic!
     os.rename(vals['_tmpdir'] + "/temp.state", vals['_tmpdir'] + "/%d.state" % statenum)
