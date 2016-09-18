@@ -149,6 +149,29 @@ def rand_str(slen):
     return ostr
 
 ###
+#  random green
+###
+def rand_green(string):
+    greens = [ -2, -10, -22, -28, -29, -34, -35, -40, -41, -46, -47, -48, -70, -71, -76, -77, -82, -83, -112, -118, -148, -154, -190, 32 ]
+    ngreens = len(greens)
+
+    ostr = ''
+    for i in range(0, len(string)):
+        ostr += '\033['
+        tgrn = greens[random.randint(0, ngreens-1)];
+        if random.randint(0, 1):
+            ostr += '1;'
+        if tgrn < 0:
+            ostr += '38;5;' + str(-1 * tgrn) + 'm'
+        else:
+            ostr += str(tgrn) + 'm'
+        ostr += string[i]
+
+    ostr += '\033[0m'
+    return ostr
+
+
+###
 #  load cert or pkey from file
 ###
 def read_pem(fname):

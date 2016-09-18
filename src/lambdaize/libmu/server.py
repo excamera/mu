@@ -187,7 +187,7 @@ def server_main_loop(states, constructor, server_info):
         n_printed = 0
         for s in states:
             s_str = str(s)
-            sys.stdout.write(s_str[:n_chars])
+            sys.stdout.write(libmu.util.rand_green(s_str[:n_chars]))
             sys.stdout.write(' ' * (n_chars - min(len(s_str), n_chars)))
             n_printed += 1
             if n_printed == n_across:
