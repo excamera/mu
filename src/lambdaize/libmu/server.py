@@ -170,7 +170,7 @@ def server_main_loop(states, constructor, server_info):
     n_per_line = 1 + server_info.num_parts // screen_height
     n_chars_maybe = max(screen_width // n_per_line, 24)
     n_across = max(screen_width // n_chars_maybe, 1)
-    n_chars = screen_width // n_across
+    n_chars = screen_width // n_across - 1
 
     def show_status():
         actStates = len([ 1 for v in rwflags if v != 0 ])
@@ -185,7 +185,7 @@ def server_main_loop(states, constructor, server_info):
         #    sys.stdout.write("\033[3J\033[H\033[2J")
         #    sys.stdout.flush()
         n_printed = 0
-        outstr = ''
+        outstr = '\n'
         for s in states:
             s_str = str(s)
             lsstr = len(s_str)
@@ -204,7 +204,7 @@ def server_main_loop(states, constructor, server_info):
                 outstr += ' '
         if n_printed != 0:
             outstr += '\n'
-        sys.stdout.write(outstr + "SERVER status (%s): active=%d, done=%d, prelaunch=%d, error=%d\n" % (runTime, actStates, doneStates, waitStates, errStates))
+        sys.stdout.write(outstr + "SERVER status (%s): active=%d, done=%d, prelaunch=%d, error=%d" % (runTime, actStates, doneStates, waitStates, errStates))
         sys.stdout.flush()
 
     while True:
