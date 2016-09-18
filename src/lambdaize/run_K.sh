@@ -38,8 +38,10 @@ else
     SSIM_ONLY=1
 fi
 
+mkdir -p logs
+LOGFILESUFFIX=k${KFDIST}_n${NWORKERS}_o${NOFFSET}_y${YVAL}_$(date +%F-%H:%M:%S)
+echo -en "\033]0; ${REGION} ${LOGFILESUFFIX//_/ }\a"
 set -u
-echo -en "\033]0; ${REGION} k${KFDIST} n${NWORKERS} o${NOFFSET} y${YVAL} \a"
 
 if [ -z "$SSIM_ONLY" ]; then
     ./xcenc_server.py \
@@ -59,7 +61,7 @@ if [ -z "$SSIM_ONLY" ]; then
         -T ${STATEPORT} \
         -R ${STATETHREADS} \
         -H ${REGION}.x.tita.nyc \
-        -O xcenc_transitions.log
+        -O logs/xcenc_transitions_${LOGFILESUFFIX}.log
 fi
 
 if [ $? = 0 ] && [ ! -z "${UPLOAD}" ]; then
@@ -76,5 +78,5 @@ if [ $? = 0 ] && [ ! -z "${UPLOAD}" ]; then
         -l ${FN_NAME} \
         -t ${PORTNUM} \
         -h ${REGION}.x.tita.nyc \
-        -O dump_ssim_transitions.log
+        -O logs/dump_ssim_transitions_${LOGFILESUFFIX}.log
 fi
