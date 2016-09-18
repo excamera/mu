@@ -192,7 +192,7 @@ def server_main_loop(states, constructor, server_info):
             s_str = s_str[:n_chars]
             if isinstance(s, libmu.machine_state.ErrorState):
                 s_str = "\033[1;31m" + s_str + "\033[0m"
-            else:
+            elif libmu.defs.Defs.fun:
                 s_str = libmu.util.rand_green(s_str)
             outstr += s_str
             outstr += ' ' * (n_chars - min(lsstr, n_chars))

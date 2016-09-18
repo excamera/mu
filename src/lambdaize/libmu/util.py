@@ -159,17 +159,26 @@ def rand_green(string):
     for i in range(0, len(string)):
         ostr += '\033['
         tgrn = greens[random.randint(0, ngreens-1)];
+        rstblink = False
+        rstinvert = False
         if random.randint(0, 3):
             ostr += '1;'
-        if not random.randint(0, 19):
+        if not random.randint(0, 39):
             ostr += '5;'
-        if not random.randint(0, 8):
+            rstblink = True
+        if not rstblink and not random.randint(0, 14):
             ostr += '7;'
+            rstinvert = True
         if tgrn < 0:
             ostr += '38;5;' + str(-1 * tgrn) + 'm'
         else:
             ostr += str(tgrn) + 'm'
         ostr += string[i]
+        if rstblink or rstinvert:
+            bstr = '25' if rstblink else ''
+            istr = '27' if rstinvert else ''
+            sc = ';' if rstblink and rstinvert else ''
+            ostr += '\033[' + bstr + sc + istr + 'm'
 
     ostr += '\033[0m'
     return ostr
