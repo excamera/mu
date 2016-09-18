@@ -159,8 +159,12 @@ def rand_green(string):
     for i in range(0, len(string)):
         ostr += '\033['
         tgrn = greens[random.randint(0, ngreens-1)];
-        if random.randint(0, 1):
+        if random.randint(0, 3):
             ostr += '1;'
+        if not random.randint(0, 19):
+            ostr += '5;'
+        if not random.randint(0, 8):
+            ostr += '7;'
         if tgrn < 0:
             ostr += '38;5;' + str(-1 * tgrn) + 'm'
         else:
