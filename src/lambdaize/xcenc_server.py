@@ -72,8 +72,9 @@ class XCEncFinishState(CommandListState):
     pipelined = True
     # NOTE it's OK to pipeline this because we'll get three "UPLOAD(" responses in *some* order
     #      if bg_silent were false, we'd have to use a SuperpositionState to run the uploads in parallel
-    nextState = FinalState
+    nextState = XCEncQuitState
     commandlist = [ (None, "upload:{0}/out_{2}/{1}.ivf\0##TMPDIR##/output.ivf")
+                  , ("OK:UPLOAD(", "upload:{0}/first_{2}/{1}.ivf\0##TMPDIR##/first.ivf")
                   , ("OK:UPLOAD(", "upload:{0}/final_state_{2}/{1}.state\0##TMPDIR##/final.state")
                   , ("OK:UPLOAD(", "upload:{0}/prev_state_{2}/{1}.state\0##TMPDIR##/prev.state")
                   , ("OK:UPLOAD(", "upload:{0}/comp_txt_{2}/{1}.txt\0##TMPDIR##/comp.txt")
@@ -82,18 +83,16 @@ class XCEncFinishState(CommandListState):
 
     def __init__(self, prevState, aNum=0):
         if not ServerInfo.upload_states:
-            self.commandlist = [ (None, "quit:") ]
+            self.commandlist = [ self.commandlist[i] for i in (0, 5) ]
         elif prevState.actorNum == 0 or prevState.info.get('converged', False):
-            self.commandlist = [ self.commandlist[i] for i in (0, 1, 4) ]
+            self.commandlist = [ self.commandlist[i] for i in (0, 1, 2, 5) ]
 
         super(XCEncFinishState, self).__init__(prevState, aNum)
 
-        if ServerInfo.upload_states:
-            pStr = "%08d" % (self.actorNum + ServerInfo.num_offset)
-            vName = ServerInfo.video_name
-            qStr = ServerInfo.quality_str
-            self.commands = [ s.format(vName, pStr, qStr) if s is not None else None for s in self.commands ]
-            self.nextState = XCEncQuitState
+        pStr = "%08d" % (self.actorNum + ServerInfo.num_offset)
+        vName = ServerInfo.video_name
+        qStr = ServerInfo.quality_str
+        self.commands = [ s.format(vName, pStr, qStr) if s is not None else None for s in self.commands ]
 
 class XCEncCheckConvergedState(OnePassState):
     extra = "(converged?)"
@@ -112,31 +111,14 @@ class XCEncCompareState(OnePassState):
     command = "run:test ! -f \"##TMPDIR##/prev.state\" || ./comp-states \"##TMPDIR##/prev.state\" \"##TMPDIR##/final.state\" >> \"##TMPDIR##\"/comp.txt"
     nextState = XCEncCheckConvergedState
 
-class XCEncUploadFirstIVFState(CommandListState):
-    extra = "(u/l first)"
-    nextState = None
-    commandlist = [ (None, "upload:{0}/first_{2}/{1}.ivf\0##TMPDIR##/output.ivf")
-                  , ("OK:UPLOAD(", None)
-                  ]
-
-    def __init__(self, prevState, aNum=0):
-        super(XCEncUploadFirstIVFState, self).__init__(prevState, aNum)
-        vName = ServerInfo.video_name
-        pStr = "%08d" % (self.actorNum + ServerInfo.num_offset)
-        qStr = ServerInfo.quality_str
-        self.commands = [ s.format(vName, pStr, qStr) if s is not None else None for s in self.commands ]
-
 class XCEncDumpState(CommandListState):
     extra = "(xc-dump)"
     nextState = TerminalState
+    pipelined = True
     commandlist = [ (None, "run:./xc-dump \"##TMPDIR##/output.ivf\" \"##TMPDIR##/final.state\"")
+                  , ("OK:RETVAL(0)", "run:cp \"##TMPDIR##/output.ivf\" \"##TMPDIR##/first.ivf\"")
                   , ("OK:RETVAL(0)", None)
                   ]
-
-    def __init__(self, prevState, aNum=0):
-        super(XCEncDumpState, self).__init__(prevState, aNum)
-        if ServerInfo.upload_states:
-            self.nextState = XCEncUploadFirstIVFState
 
 class XCEncRunState(CommandListState):
     extra = "(encode)"
@@ -236,7 +218,6 @@ class XCEncLoopState(ForLoopState):
 # need to do this here to avoid use-before-def
 XCEncRunState.nextState = XCEncLoopState
 XCEncDumpState.nextState = XCEncLoopState
-XCEncUploadFirstIVFState.nextState = XCEncLoopState
 
 class XCEncSettingsState(CommandListState):
     extra = "(setup)"
