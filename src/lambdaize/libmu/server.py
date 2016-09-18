@@ -185,6 +185,7 @@ def server_main_loop(states, constructor, server_info):
         #    sys.stdout.write("\033[3J\033[H\033[2J")
         #    sys.stdout.flush()
         n_printed = 0
+        outstr = ''
         for s in states:
             s_str = str(s)
             lsstr = len(s_str)
@@ -193,17 +194,17 @@ def server_main_loop(states, constructor, server_info):
                 s_str = "\033[1;31m" + s_str + "\033[0m"
             else:
                 s_str = libmu.util.rand_green(s_str)
-            sys.stdout.write(s_str)
-            sys.stdout.write(' ' * (n_chars - min(lsstr, n_chars)))
+            outstr += s_str
+            outstr += ' ' * (n_chars - min(lsstr, n_chars))
             n_printed += 1
             if n_printed == n_across:
-                sys.stdout.write('\n')
+                outstr += '\n'
                 n_printed = 0
             else:
-                sys.stdout.write(' ')
+                outstr += ' '
         if n_printed != 0:
-            sys.stdout.write("\n")
-        sys.stdout.write("SERVER status (%s): active=%d, done=%d, prelaunch=%d, error=%d\n" % (runTime, actStates, doneStates, waitStates, errStates))
+            outstr += '\n'
+        sys.stdout.write(outstr + "SERVER status (%s): active=%d, done=%d, prelaunch=%d, error=%d\n" % (runTime, actStates, doneStates, waitStates, errStates))
         sys.stdout.flush()
 
     while True:
