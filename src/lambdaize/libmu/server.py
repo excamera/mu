@@ -187,12 +187,14 @@ def server_main_loop(states, constructor, server_info):
         n_printed = 0
         for s in states:
             s_str = str(s)
+            lsstr = len(s_str)
+            s_str = s_str[:n_chars]
             if isinstance(s, libmu.machine_state.ErrorState):
                 s_str = "\033[1;31m" + s_str + "\033[0m"
             else:
                 s_str = libmu.util.rand_green(s_str)
-            sys.stdout.write(s_str[:n_chars])
-            sys.stdout.write(' ' * (n_chars - min(len(s_str), n_chars)))
+            sys.stdout.write(s_str)
+            sys.stdout.write(' ' * (n_chars - min(lsstr, n_chars)))
             n_printed += 1
             if n_printed == n_across:
                 sys.stdout.write('\n')
