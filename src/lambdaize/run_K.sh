@@ -32,28 +32,35 @@ if [ ! -z "$NOUPLOAD" ]; then
 else
     UPLOAD="-u"
 fi
+if [ -z "$SSIM_ONLY" ]; then
+    SSIM_ONLY=""
+else
+    SSIM_ONLY=1
+fi
 
 set -u
 echo -en "\033]0; ${REGION} k${KFDIST} n${NWORKERS} o${NOFFSET} y${YVAL} \a"
 
-./xcenc_server.py \
-    ${DEBUG} \
-    ${UPLOAD} \
-    -n ${NWORKERS} \
-    -o ${NOFFSET} \
-    -X $((${NWORKERS} / 2)) \
-    -Y ${YVAL} \
-    -K ${KFDIST} \
-    -v sintel-4k-y4m_06 \
-    -b excamera-${REGION} \
-    -r ${REGION} \
-    -l ${FN_NAME} \
-    -t ${PORTNUM} \
-    -h ${REGION}.x.tita.nyc \
-    -T ${STATEPORT} \
-    -R ${STATETHREADS} \
-    -H ${REGION}.x.tita.nyc \
-    -O xcenc_transitions.log
+if [ -z "$SSIM_ONLY" ]; then
+    ./xcenc_server.py \
+        ${DEBUG} \
+        ${UPLOAD} \
+        -n ${NWORKERS} \
+        -o ${NOFFSET} \
+        -X $((${NWORKERS} / 2)) \
+        -Y ${YVAL} \
+        -K ${KFDIST} \
+        -v sintel-4k-y4m_06 \
+        -b excamera-${REGION} \
+        -r ${REGION} \
+        -l ${FN_NAME} \
+        -t ${PORTNUM} \
+        -h ${REGION}.x.tita.nyc \
+        -T ${STATEPORT} \
+        -R ${STATETHREADS} \
+        -H ${REGION}.x.tita.nyc \
+        -O xcenc_transitions.log
+fi
 
 if [ $? = 0 ] && [ ! -z "${UPLOAD}" ]; then
     ./dump_ssim_server.py \
