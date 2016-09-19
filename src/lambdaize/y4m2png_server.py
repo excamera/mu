@@ -7,16 +7,16 @@ from libmu import server, TerminalState, CommandListState, ForLoopState
 class ServerInfo(object):
     port_number = 13579
 
-    video_name = "sintel-1k"
-    num_frames = 6
-    num_offset = 0
-    num_parts = 1
+    video_name      = "sintel-1k"
+    num_frames      = 6
+    num_offset      = 0
+    num_parts       = 1
     lambda_function = "y4m2png"
-    regions = ["us-east-1"]
-    bucket = "excamera-us-east-1"
-    in_format = "y4m16"
-    out_file = None
-    profiling = None
+    regions         = ["us-east-1"]
+    bucket          = "excamera-us-east-1"
+    in_format       = "y4m_06"
+    out_file        = None
+    profiling       = None
 
     cacert = None
     srvcrt = None
@@ -26,14 +26,14 @@ class FinalState(TerminalState):
     extra = "(finished)"
 
 class Y4M2PNGUploadState(CommandListState):
-    extra = "(uploading)"
-    nextState = FinalState
+    extra       = "(uploading)"
+    nextState   = FinalState
     commandlist = [ (None, "upload:")
                   , "quit:"
                   ]
 
 class Y4M2PNGRetrieveAndRunState(CommandListState):
-    extra = "(retrieving Y4M and appending to PNG)"
+    extra       = "(retrieving Y4M and appending to PNG)"
     commandlist = [ (None, "set:inkey:{0}/{1}.y4m")
                   , "set:targfile:##TMPDIR##/{1}.y4m"
                   , "retrieve:"
@@ -44,15 +44,15 @@ class Y4M2PNGRetrieveAndRunState(CommandListState):
     def __init__(self, prevState, aNum=0):
         super(Y4M2PNGRetrieveAndRunState, self).__init__(prevState, aNum)
         # choose which key to retrieve next
-        inName = "%s-%s" % (ServerInfo.video_name, ServerInfo.in_format)
-        inNumber = 1 + ServerInfo.num_frames * (self.actorNum + ServerInfo.num_offset) + self.info['retrieve_iter']
+        inName        = "%s-%s" % (ServerInfo.video_name, ServerInfo.in_format)
+        inNumber      = 1 + ServerInfo.num_frames * (self.actorNum + ServerInfo.num_offset) + self.info['retrieve_iter']
         self.commands = [ s.format(inName, "%08d" % inNumber) if s is not None else None for s in self.commands ]
 
 class Y4M2PNGRetrieveLoopState(ForLoopState):
-    extra = "(retrieve loop)"
+    extra     = "(retrieve loop)"
     loopState = Y4M2PNGRetrieveAndRunState
     exitState = Y4M2PNGUploadState
-    iterKey = "retrieve_iter"
+    iterKey   = "retrieve_iter"
 
     def __init__(self, prevState, aNum=0):
         super(Y4M2PNGRetrieveLoopState, self).__init__(prevState, aNum)
@@ -63,8 +63,8 @@ class Y4M2PNGRetrieveLoopState(ForLoopState):
 Y4M2PNGRetrieveAndRunState.nextState = Y4M2PNGRetrieveLoopState
 
 class Y4M2PNGConfigState(CommandListState):
-    extra = "(configuring lambda worker)"
-    nextState = Y4M2PNGRetrieveLoopState
+    extra       = "(configuring lambda worker)"
+    nextState   = Y4M2PNGRetrieveLoopState
     commandlist = [ ("OK:HELLO", "set:cmdinfile:##TMPDIR##/%08d.y4m")
                   , "set:cmdoutfile:##TMPDIR##/{1}.png"
                   , "set:fromfile:##TMPDIR##/{1}.png"
@@ -77,8 +77,8 @@ class Y4M2PNGConfigState(CommandListState):
 
     def __init__(self, prevState, actorNum):
         super(Y4M2PNGConfigState, self).__init__(prevState, actorNum)
-        outName = "%s-y4m_%02d" % (ServerInfo.video_name, ServerInfo.num_frames)
-        outNumber = self.actorNum + ServerInfo.num_offset
+        outName       = "%s-y4m_%02d" % (ServerInfo.video_name, ServerInfo.num_frames)
+        outNumber     = self.actorNum + ServerInfo.num_offset
         self.commands = [ s.format(outName, "%08d" % outNumber) if s is not None else None for s in self.commands ]
 
 def run():
