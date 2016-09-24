@@ -15,7 +15,7 @@ open my $infile, "<" . $ARGV[0] or die "Could not open $ARGV[0]: $!";
 my $header = <$infile>;
 my ($width, $height, $space);
                # YUV4MPEG2 W854      H480      F24:1          Ip A0:0           C420jpeg          XYSCSS=420JPEG
-if ($header =~ /^YUV4MPEG2 W([0-9]+) H([0-9]+) F[0-9]+:[0-9]+ I. A[0-9]+:[0-9]+ C([0-9]{3})[a-z]* X.*$/) {
+if ($header =~ /^YUV4MPEG2 W([0-9]+) H([0-9]+) F[0-9]+:[0-9]+ I. A[0-9]+:[0-9]+ C([0-9]{3})[a-z]*.*$/) {
     $width = $1;
     $height = $2;
     $space = $3;
