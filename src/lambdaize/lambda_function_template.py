@@ -128,7 +128,7 @@ def make_cmdstring(msg, vals):
     # statefile
     if vals['run_iter'] > 0 and vals['expect_statefile']:
         instatefile = "##TMPDIR##/%d.state" % (vals['run_iter'] - 1)
-        instatewait = '( while [ ! -f "%s" ]; do sleep 1; done; echo "hi" ) | ' % instatefile
+        instatewait = '( while [ ! -f "%s" ]; do sleep 0.025; done; echo "hi" ) | ' % instatefile
         instateswitch = '-r -I "%s" -p "##TMPDIR##/prev.ivf"' % instatefile
 
         if vals['run_iter'] > 1:
