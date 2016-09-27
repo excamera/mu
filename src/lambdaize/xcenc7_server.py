@@ -1,0 +1,175 @@
+#!/usr/bin/python
+
+import os
+
+from libmu import util, server, TerminalState, CommandListState, OnePassState, ErrorState
+
+class ServerInfo(object):
+    states = []
+    host_addr = None
+    port_number = 13579
+
+    state_srv_addr = '127.0.0.1'
+    state_srv_port = 13337
+    state_srv_threads = 1
+
+    upload_states = False
+
+    quality_y = 30
+    quality_str = "30_x"
+
+    video_name = "sintel-1k-y4m"
+    num_offset = 0
+    num_parts = 1
+    overprovision = 25
+
+    keyframe_distance = 16
+
+    lambda_function = "xcenc7"
+    regions = ["us-east-1"]
+    bucket = "excamera-us-east-1"
+    out_file = None
+    profiling = None
+
+    cacert = None
+    srvcrt = None
+    srvkey = None
+
+    client_uniq = None
+
+
+class FinalState(TerminalState):
+    extra = "(done)"
+
+class XCEnc7QuitState(OnePassState):
+    extra = "(sending quit)"
+    command = "quit:"
+    expect = None
+    nextState = FinalState
+
+class XCEnc7FinishState(CommandListState):
+    extra = "(u/l states)"
+    pipelined = True
+    # NOTE it's OK to pipeline this because we'll get three "UPLOAD(" responses in *some* order
+    #      if bg_silent were false, we'd have to use a SuperpositionState to run the uploads in parallel
+    nextState = XCEnc7QuitState
+    commandlist = [ ("OK:RETVAL(0)", "upload:{0}/out_{2}/{1}.ivf\0##TMPDIR##/output.ivf")
+                  , ("OK:UPLOAD(", "upload:{0}/first_{2}/{1}.ivf\0##TMPDIR##/first.ivf")
+                  , ("OK:UPLOAD(", "upload:{0}/final_state_{2}/{1}.state\0##TMPDIR##/final.state")
+                  , ("OK:UPLOAD(", None)
+                  ]
+
+    def __init__(self, prevState, aNum=0):
+        if not ServerInfo.upload_states:
+            self.commandlist = [ self.commandlist[i] for i in (0, 3) ]
+
+        super(XCEnc7FinishState, self).__init__(prevState, aNum)
+
+        pStr = "%08d" % (self.actorNum + ServerInfo.num_offset)
+        vName = ServerInfo.video_name + "_06"
+        qStr = ServerInfo.quality_str
+        self.commands = [ s.format(vName, pStr, qStr) if s is not None else None for s in self.commands ]
+
+class XCEnc7RecodeState(CommandListState):
+    extra = "(pre-encode)"
+    pipelined = False
+    nextState = XCEnc7FinishState
+    commandlist = [ ("OK:RETVAL(0)", "seti:run_iter:{0}")
+                  , (None, "seti:send_statefile:{2}")
+                  , ("OK:SETI", None)
+                  , ("OK:SETI", "run:( while [ ! -f {1} ]; do sleep 0.025; done; echo \"hi\" ) | ./xc-enc -7 -w 0.75 -i y4m -O \"##TMPDIR##/final.state\" -o \"##TMPDIR##/output.ivf\" -r -I {1} -p \"##TMPDIR##/prev.ivf\" \"##TMPDIR##/input.y4m\" 2>&1")
+                  ]
+
+    def __init__(self, prevState, aNum=0):
+        super(XCEnc7RecodeState, self).__init__(prevState, aNum)
+
+        kfDist = ServerInfo.keyframe_distance
+        tell_pass_num = self.actorNum % kfDist
+        state_num = tell_pass_num - 1
+        state_file = "\"##TMPDIR##/%d.state\"" % state_num
+
+        # send statefile unless we have no forward neighbor
+        send_statefile = 1
+        if kfDist - tell_pass_num == 1 or ServerInfo.num_parts - self.actorNum == 1:
+            send_statefile = 0
+
+        self.commands = [ s.format(tell_pass_num, state_file, send_statefile) if s is not None else None for s in self.commands ]
+
+class XCEnc7StartState(CommandListState):
+    extra = "(dl/enc1)"
+    nextState = XCEnc7RecodeState
+    pipelined = False
+    # manual quasi-pipelining reduces #roundtrips without requiring another state
+    commandlist = [ ("OK:HELLO", "connect:{4}:HELLO_STATE:{2}:{1}:{3}")
+                  , (None, "seti:run_iter:0")
+                  , (None, "seti:send_statefile:{8}")
+                  , (None, "retrieve:{0}/{1}.y4m\0##TMPDIR##/input.y4m")
+                  , ("OK:CONNECT", None)
+                  , ("OK:SETI", None)
+                  , ("OK:SETI", None)
+                  , ("OK:RETRIEV", "run:./vpxenc --ivf -q --codec=vp8 --good --cpu-used=0 --end-usage=cq --min-q=0 --max-q=63 --cq-level={5} --buf-initial-sz=10000 --buf-optimal-sz=20000 --buf-sz=40000 --undershoot-pct=100 --passes=2 --auto-alt-ref=1 --threads=1 --token-parts=0 --tune=ssim --target-bitrate=4294967295 -o \"##TMPDIR##/output.ivf\" \"##TMPDIR##/input.y4m\" {6} {7}")
+                  ]
+
+    def __init__(self, prevState, aNum=0, gNum=0):
+        super(XCEnc7StartState, self).__init__(prevState, aNum)
+        pNum = self.actorNum + ServerInfo.num_offset
+        nNum = pNum + 1
+        pStr = "%08d" % pNum
+
+        vName = ServerInfo.video_name
+        kfDist = ServerInfo.keyframe_distance
+        effActNum = self.actorNum % kfDist
+        if effActNum != 0:
+            vName += "_07"
+        else:
+            vName += "_06"
+            self.nextState = XCEnc7FinishState
+
+        if ServerInfo.client_uniq is None:
+            ServerInfo.client_uniq = util.rand_str(16)
+        rStr = ServerInfo.client_uniq
+
+        port_number = ServerInfo.state_srv_port + (gNum % ServerInfo.state_srv_threads)
+        stateAddr = "%s:%d" % (ServerInfo.state_srv_addr, port_number)
+
+        xcDump = ""
+        if kfDist > 1:
+            xcDump = "&& ./xc-dump \"##TMPDIR##/output.ivf\" \"##TMPDIR##/final.state\""
+
+        cpFirst = ""
+        if ServerInfo.upload_states:
+            cpFirst = "&& cp \"##TMPDIR##/output.ivf\" \"##TMPDIR##/first.ivf\""
+
+        # send statefile unless we have no forward neighbor
+        send_statefile = 0
+        if effActNum == 0:
+            send_statefile = 1
+
+        self.commands = [ s.format(vName, pStr, rStr, nNum, stateAddr, str(ServerInfo.quality_y), xcDump, cpFirst, send_statefile) if s is not None else None for s in self.commands ]
+
+def run():
+    server.server_main_loop(ServerInfo.states, XCEnc7StartState, ServerInfo)
+
+def main():
+    server.options(ServerInfo)
+
+    # launch the lambdas
+    event = { "mode": 1
+            , "port": ServerInfo.port_number
+            , "addr": ServerInfo.host_addr
+            , "nonblock": 1
+            , "bg_silent": 1
+            , "minimal_recode": 1
+            , "expect_statefile": 1
+            , "cacert": ServerInfo.cacert
+            , "srvcrt": ServerInfo.srvcrt
+            , "srvkey": ServerInfo.srvkey
+            , "bucket": ServerInfo.bucket
+            }
+    server.server_launch(ServerInfo, event, os.environ['AWS_ACCESS_KEY_ID'], os.environ['AWS_SECRET_ACCESS_KEY'])
+
+    # run the server
+    run()
+
+if __name__ == "__main__":
+    main()
