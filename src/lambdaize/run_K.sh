@@ -4,7 +4,7 @@
 . k_fn_name
 
 if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ]; then
-    echo "Usage: $0 n_phase_2 n_workers n_offset y_val"
+    echo "Usage: $0 kf_dist n_workers n_offset y_val"
     exit 1
 fi
 
@@ -37,6 +37,13 @@ if [ -z "$SSIM_ONLY" ]; then
 else
     SSIM_ONLY=1
 fi
+if [ -z "$SEVEN_FRAMES" ]; then
+    VID_SUFFIX="_06"
+    SERVER_EXEC="xcenc"
+else
+    VID_SUFFIX=""
+    SERVER_EXEC="xcenc7"
+fi
 
 mkdir -p logs
 LOGFILESUFFIX=k${KFDIST}_n${NWORKERS}_o${NOFFSET}_y${YVAL}_$(date +%F-%H:%M:%S)
@@ -44,7 +51,7 @@ echo -en "\033]0; ${REGION} ${LOGFILESUFFIX//_/ }\a"
 set -u
 
 if [ -z "$SSIM_ONLY" ]; then
-    ./xcenc_server.py \
+    ./${SERVER_EXEC}_server.py \
         ${DEBUG} \
         ${UPLOAD} \
         -n ${NWORKERS} \
@@ -52,7 +59,7 @@ if [ -z "$SSIM_ONLY" ]; then
         -X $((${NWORKERS} / 2)) \
         -Y ${YVAL} \
         -K ${KFDIST} \
-        -v sintel-4k-y4m_06 \
+        -v sintel-4k-y4m"${VID_SUFFIX}" \
         -b excamera-${REGION} \
         -r ${REGION} \
         -l ${FN_NAME} \
@@ -61,7 +68,7 @@ if [ -z "$SSIM_ONLY" ]; then
         -T ${STATEPORT} \
         -R ${STATETHREADS} \
         -H ${REGION}.x.tita.nyc \
-        -O logs/xcenc_transitions_${LOGFILESUFFIX}.log
+        -O logs/${SERVER_EXEC}_transitions_${LOGFILESUFFIX}.log
 fi
 
 if [ $? = 0 ] && [ ! -z "${UPLOAD}" ]; then
