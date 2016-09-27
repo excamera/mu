@@ -1,5 +1,24 @@
 #!/usr/bin/python
 
+###
+# This server implements the state machine for converting a png
+# image to a y4m image.
+#
+# State Machine Description :
+#  Co-ordinating png2y4m
+#   -> Configure the lambda with instance specific-settings
+#   -> Retrieve each input png from S3
+#   -> Run the commands in the command-list on the retrieved files
+#   -> Upload the resulting y4m
+#
+# State Machine Transitions :
+#  PNG2Y4MConfigState
+#    -> PNG2Y4MRetrieveLoopState
+#    -> PNG2Y4MRetrieveAndRunState
+#    -> PNG2Y4MUploadState
+#    -> FinalState
+###
+
 import os
 
 from libmu import server, TerminalState, CommandListState, ForLoopState
@@ -7,16 +26,16 @@ from libmu import server, TerminalState, CommandListState, ForLoopState
 class ServerInfo(object):
     port_number = 13579
 
-    video_name = "sintel-1k"
-    num_frames = 6
-    num_offset = 0
-    num_parts = 1
+    video_name      = "sintel-1k"
+    num_frames      = 6
+    num_offset      = 0
+    num_parts       = 1
     lambda_function = "png2y4m"
-    regions = ["us-east-1"]
-    bucket = "excamera-us-east-1"
-    in_format = "png16"
-    out_file = None
-    profiling = None
+    regions         = ["us-east-1"]
+    bucket          = "excamera-us-east-1"
+    in_format       = "png16"
+    out_file        = None
+    profiling       = None
 
     cacert = None
     srvcrt = None
@@ -26,14 +45,14 @@ class FinalState(TerminalState):
     extra = "(finished)"
 
 class PNG2Y4MUploadState(CommandListState):
-    extra = "(uploading)"
-    nextState = FinalState
+    extra       = "(uploading)"
+    nextState   = FinalState
     commandlist = [ (None, "upload:")
                   , "quit:"
                   ]
 
 class PNG2Y4MRetrieveAndRunState(CommandListState):
-    extra = "(retrieving PNG and appending to Y4M)"
+    extra       = "(retrieving PNG and appending to Y4M)"
     commandlist = [ (None, "set:inkey:{0}/{1}.png")
                   , "set:targfile:##TMPDIR##/{1}.png"
                   , "retrieve:"
@@ -49,10 +68,10 @@ class PNG2Y4MRetrieveAndRunState(CommandListState):
         self.commands = [ s.format(inName, "%08d" % inNumber) if s is not None else None for s in self.commands ]
 
 class PNG2Y4MRetrieveLoopState(ForLoopState):
-    extra = "(retrieve loop)"
+    extra     = "(retrieve loop)"
     loopState = PNG2Y4MRetrieveAndRunState
     exitState = PNG2Y4MUploadState
-    iterKey = "retrieve_iter"
+    iterKey   = "retrieve_iter"
 
     def __init__(self, prevState, aNum=0):
         super(PNG2Y4MRetrieveLoopState, self).__init__(prevState, aNum)
@@ -63,8 +82,8 @@ class PNG2Y4MRetrieveLoopState(ForLoopState):
 PNG2Y4MRetrieveAndRunState.nextState = PNG2Y4MRetrieveLoopState
 
 class PNG2Y4MConfigState(CommandListState):
-    extra = "(configuring lambda worker)"
-    nextState = PNG2Y4MRetrieveLoopState
+    extra       = "(configuring lambda worker)"
+    nextState   = PNG2Y4MRetrieveLoopState
     commandlist = [ ("OK:HELLO", "set:cmdinfile:##TMPDIR##/%08d.png")
                   , "set:cmdoutfile:##TMPDIR##/{1}.y4m"
                   , "set:fromfile:##TMPDIR##/{1}.y4m"
@@ -77,8 +96,8 @@ class PNG2Y4MConfigState(CommandListState):
 
     def __init__(self, prevState, actorNum):
         super(PNG2Y4MConfigState, self).__init__(prevState, actorNum)
-        outName = "%s-y4m_%02d" % (ServerInfo.video_name, ServerInfo.num_frames)
-        outNumber = self.actorNum + ServerInfo.num_offset
+        outName       = "%s-y4m_%02d" % (ServerInfo.video_name, ServerInfo.num_frames)
+        outNumber     = self.actorNum + ServerInfo.num_offset
         self.commands = [ s.format(outName, "%08d" % outNumber) if s is not None else None for s in self.commands ]
 
 def run():

@@ -1,5 +1,24 @@
 #!/usr/bin/python
 
+###
+# This server implements the state machine for converting a y4m 
+# image to a png image.
+#
+# State Machine Description :
+#  Co-ordinating y4m2png
+#   -> Configure the lambda with instance specific-settings
+#   -> Retrieve each input y4m from S3
+#   -> Run the commands in the command-list on the retrieved files
+#   -> Upload the resulting png
+#
+# State Machine Transitions :
+#  Y4M2PNGConfigState
+#    -> Y4M2PNGRetrieveLoopState
+#    -> Y4M2PNGRetrieveAndRunState
+#    -> Y4M2PNGUploadState
+#    -> FinalState
+###
+
 import os
 
 from libmu import server, TerminalState, CommandListState, ForLoopState
@@ -82,9 +101,11 @@ class Y4M2PNGConfigState(CommandListState):
         self.commands = [ s.format(outName, "%08d" % outNumber) if s is not None else None for s in self.commands ]
 
 def run():
+    # start from Y4M2PNGConfigState - configures lambda worker
     server.server_main_loop([], Y4M2PNGConfigState, ServerInfo)
 
 def main():
+    # set the server info
     server.options(ServerInfo)
 
     # launch the lambdas
