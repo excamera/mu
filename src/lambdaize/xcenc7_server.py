@@ -2,7 +2,7 @@
 
 import os
 
-from libmu import util, server, TerminalState, CommandListState, OnePassState, ErrorState
+from libmu import util, server, TerminalState, CommandListState, OnePassState
 
 class ServerInfo(object):
     states = []
@@ -72,12 +72,11 @@ class XCEnc7FinishState(CommandListState):
 
 class XCEnc7RecodeState(CommandListState):
     extra = "(pre-encode)"
-    pipelined = False
+    pipelined = True
     nextState = XCEnc7FinishState
     commandlist = [ ("OK:RETVAL(0)", "seti:run_iter:{0}")
-                  , (None, "seti:send_statefile:{2}")
-                  , ("OK:SETI", None)
-                  , ("OK:SETI", "run:( while [ ! -f {1} ]; do sleep 0.025; done; echo \"hi\" ) | ./xc-enc -7 -w 0.75 -i y4m -O \"##TMPDIR##/final.state\" -o \"##TMPDIR##/output.ivf\" -r -I {1} -p \"##TMPDIR##/prev.ivf\" \"##TMPDIR##/input.y4m\" 2>&1")
+                  , "seti:send_statefile:{2}"
+                  , "run:( while [ ! -f {1} ]; do sleep 0.025; done; echo \"hi\" ) | ./xc-enc -7 -w 0.75 -i y4m -O \"##TMPDIR##/final.state\" -o \"##TMPDIR##/output.ivf\" -r -I {1} -p \"##TMPDIR##/prev.ivf\" \"##TMPDIR##/input.y4m\" 2>&1"
                   ]
 
     def __init__(self, prevState, aNum=0):
@@ -95,19 +94,44 @@ class XCEnc7RecodeState(CommandListState):
 
         self.commands = [ s.format(tell_pass_num, state_file, send_statefile) if s is not None else None for s in self.commands ]
 
+class XCEnc7DumpState(OnePassState):
+    extra = "(xc-dump)"
+    expect = "OK:RETVAL(0)"
+    command = "run:./xc-dump \"##TMPDIR##/output.ivf\" \"##TMPDIR##/final.state\""
+    nextState = XCEnc7RecodeState
+
+    def __init__(self, prevState, aNum=0):
+        super(XCEnc7DumpState, self).__init__(prevState, aNum)
+
+        if self.actorNum % ServerInfo.keyframe_distance == 0:
+            self.nextState = XCEnc7FinishState
+
+class XCEnc7EncodeState(OnePassState):
+    extra = "(vpxenc)"
+    expect = "OK:RETRIEV"
+    command = "run:./vpxenc --ivf -q --codec=vp8 --good --cpu-used=0 --end-usage=cq --min-q=0 --max-q=63 --cq-level={0} --buf-initial-sz=10000 --buf-optimal-sz=20000 --buf-sz=40000 --undershoot-pct=100 --passes=2 --auto-alt-ref=1 --threads=1 --token-parts=0 --tune=ssim --target-bitrate=4294967295 -o \"##TMPDIR##/output.ivf\" \"##TMPDIR##/input.y4m\" {1}"
+    nextState = XCEnc7DumpState
+
+    def __init__(self, prevState, aNum=0):
+        super(XCEnc7EncodeState, self).__init__(prevState, aNum)
+
+        cpFirst = ""
+        if ServerInfo.upload_states:
+            cpFirst = "&& cp \"##TMPDIR##/output.ivf\" \"##TMPDIR##/first.ivf\""
+
+        if ServerInfo.keyframe_distance < 2:
+            self.nextState = XCEnc7FinishState
+
+        self.command = self.command.format(str(ServerInfo.quality_y), cpFirst)
+
 class XCEnc7StartState(CommandListState):
     extra = "(dl/enc1)"
-    nextState = XCEnc7RecodeState
-    pipelined = False
-    # manual quasi-pipelining reduces #roundtrips without requiring another state
+    nextState = XCEnc7EncodeState
+    pipelined = True
     commandlist = [ ("OK:HELLO", "connect:{4}:HELLO_STATE:{2}:{1}:{3}")
-                  , (None, "seti:run_iter:0")
-                  , (None, "seti:send_statefile:{8}")
-                  , (None, "retrieve:{0}/{1}.y4m\0##TMPDIR##/input.y4m")
-                  , ("OK:CONNECT", None)
-                  , ("OK:SETI", None)
-                  , ("OK:SETI", None)
-                  , ("OK:RETRIEV", "run:./vpxenc --ivf -q --codec=vp8 --good --cpu-used=0 --end-usage=cq --min-q=0 --max-q=63 --cq-level={5} --buf-initial-sz=10000 --buf-optimal-sz=20000 --buf-sz=40000 --undershoot-pct=100 --passes=2 --auto-alt-ref=1 --threads=1 --token-parts=0 --tune=ssim --target-bitrate=4294967295 -o \"##TMPDIR##/output.ivf\" \"##TMPDIR##/input.y4m\" {6} {7}")
+                  , "seti:run_iter:0"
+                  , "seti:send_statefile:{5}"
+                  , "retrieve:{0}/{1}.y4m\0##TMPDIR##/input.y4m"
                   ]
 
     def __init__(self, prevState, aNum=0, gNum=0):
@@ -117,13 +141,11 @@ class XCEnc7StartState(CommandListState):
         pStr = "%08d" % pNum
 
         vName = ServerInfo.video_name
-        kfDist = ServerInfo.keyframe_distance
-        effActNum = self.actorNum % kfDist
+        effActNum = self.actorNum % ServerInfo.keyframe_distance
         if effActNum != 0:
             vName += "_07"
         else:
             vName += "_06"
-            self.nextState = XCEnc7FinishState
 
         if ServerInfo.client_uniq is None:
             ServerInfo.client_uniq = util.rand_str(16)
@@ -132,20 +154,12 @@ class XCEnc7StartState(CommandListState):
         port_number = ServerInfo.state_srv_port + (gNum % ServerInfo.state_srv_threads)
         stateAddr = "%s:%d" % (ServerInfo.state_srv_addr, port_number)
 
-        xcDump = ""
-        if kfDist > 1:
-            xcDump = "&& ./xc-dump \"##TMPDIR##/output.ivf\" \"##TMPDIR##/final.state\""
-
-        cpFirst = ""
-        if ServerInfo.upload_states:
-            cpFirst = "&& cp \"##TMPDIR##/output.ivf\" \"##TMPDIR##/first.ivf\""
-
         # send statefile unless we have no forward neighbor
         send_statefile = 0
         if effActNum == 0:
             send_statefile = 1
 
-        self.commands = [ s.format(vName, pStr, rStr, nNum, stateAddr, str(ServerInfo.quality_y), xcDump, cpFirst, send_statefile) if s is not None else None for s in self.commands ]
+        self.commands = [ s.format(vName, pStr, rStr, nNum, stateAddr, send_statefile) if s is not None else None for s in self.commands ]
 
 def run():
     server.server_main_loop(ServerInfo.states, XCEnc7StartState, ServerInfo)
