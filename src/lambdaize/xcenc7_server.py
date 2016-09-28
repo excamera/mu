@@ -21,6 +21,7 @@ class ServerInfo(object):
     video_name = "sintel-1k-y4m"
     num_offset = 0
     num_parts = 1
+    num_frames = 6
     overprovision = 25
 
     keyframe_distance = 16
@@ -65,7 +66,7 @@ class XCEnc7FinishState(CommandListState):
         super(XCEnc7FinishState, self).__init__(prevState, aNum)
 
         pStr = "%08d" % (self.actorNum + ServerInfo.num_offset)
-        vName = ServerInfo.video_name + "_06"
+        vName = ServerInfo.video_name + ("_%02d" % ServerInfo.num_frames)
         qStr = ServerInfo.quality_str
         self.commands = [ s.format(vName, pStr, qStr) if s is not None else None for s in self.commands ]
 
@@ -140,9 +141,9 @@ class XCEnc7StartState(CommandListState):
         vName = ServerInfo.video_name
         effActNum = self.actorNum % ServerInfo.keyframe_distance
         if effActNum != 0:
-            vName += "_07"
+            vName += ("_%02d" % (ServerInfo.num_frames + 1))
         else:
-            vName += "_06"
+            vName += ("_%02d" % ServerInfo.num_frames)
 
         if ServerInfo.client_uniq is None:
             ServerInfo.client_uniq = util.rand_str(16)
