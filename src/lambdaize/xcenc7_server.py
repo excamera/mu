@@ -54,7 +54,6 @@ class XCEnc7FinishState(CommandListState):
     #      if bg_silent were false, we'd have to use a SuperpositionState to run the uploads in parallel
     nextState = XCEnc7QuitState
     commandlist = [ ("OK:RETVAL(0)", "upload:{0}/out_{2}/{1}.ivf\0##TMPDIR##/output.ivf")
-                  , ("OK:UPLOAD(", "upload:{0}/first_{2}/{1}.ivf\0##TMPDIR##/first.ivf")
                   , ("OK:UPLOAD(", "upload:{0}/final_state_{2}/{1}.state\0##TMPDIR##/final.state")
                   , ("OK:UPLOAD(", None)
                   ]
@@ -109,22 +108,18 @@ class XCEnc7CopyState(OnePassState):
 class XCEnc7EncodeState(OnePassState):
     extra = "(vpxenc)"
     expect = "OK:RETRIEV"
-    command = "run:./vpxenc --ivf -q --codec=vp8 --good --cpu-used=0 --end-usage=cq --min-q=0 --max-q=63 --cq-level={0} --buf-initial-sz=10000 --buf-optimal-sz=20000 --buf-sz=40000 --undershoot-pct=100 --passes=2 --auto-alt-ref=1 --threads=1 --token-parts=0 --tune=ssim --target-bitrate=4294967295 -o \"##TMPDIR##/output.ivf\" \"##TMPDIR##/input.y4m\" {1}"
+    command = "run:./vpxenc --ivf -q --codec=vp8 --good --cpu-used=0 --end-usage=cq --min-q=0 --max-q=63 --cq-level={0} --buf-initial-sz=10000 --buf-optimal-sz=20000 --buf-sz=40000 --undershoot-pct=100 --passes=2 --auto-alt-ref=1 --threads=1 --token-parts=0 --tune=ssim --target-bitrate=4294967295 -o \"##TMPDIR##/output.ivf\" \"##TMPDIR##/input.y4m\""
     nextState = XCEnc7CopyState
 
     def __init__(self, prevState, aNum=0):
         super(XCEnc7EncodeState, self).__init__(prevState, aNum)
-
-        cpFirst = ""
-        if ServerInfo.upload_states:
-            cpFirst = "&& cp \"##TMPDIR##/output.ivf\" \"##TMPDIR##/first.ivf\""
 
         if ServerInfo.keyframe_distance < 2:
             self.nextState = XCEnc7FinishState
         elif self.actorNum % ServerInfo.keyframe_distance == 0:
             self.nextState = XCEnc7DumpState
 
-        self.command = self.command.format(str(ServerInfo.quality_y), cpFirst)
+        self.command = self.command.format(str(ServerInfo.quality_y))
 
 class XCEnc7StartState(CommandListState):
     extra = "(dl/enc1)"
