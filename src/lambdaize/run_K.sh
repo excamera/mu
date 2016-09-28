@@ -39,10 +39,12 @@ else
 fi
 if [ -z "$SEVEN_FRAMES" ]; then
     VID_SUFFIX="_06"
-    SERVER_EXEC="xcenc"
+    XCENC_EXEC="xcenc"
+    DUMP_EXEC="dump_ssim"
 else
     VID_SUFFIX=""
-    SERVER_EXEC="xcenc7"
+    XCENC_EXEC="xcenc7"
+    DUMP_EXEC="dump_ssim7"
 fi
 
 mkdir -p logs
@@ -51,7 +53,7 @@ echo -en "\033]0; ${REGION} ${LOGFILESUFFIX//_/ }\a"
 set -u
 
 if [ -z "$SSIM_ONLY" ]; then
-    ./${SERVER_EXEC}_server.py \
+    ./${XCENC_EXEC}_server.py \
         ${DEBUG} \
         ${UPLOAD} \
         -n ${NWORKERS} \
@@ -68,11 +70,11 @@ if [ -z "$SSIM_ONLY" ]; then
         -T ${STATEPORT} \
         -R ${STATETHREADS} \
         -H ${REGION}.x.tita.nyc \
-        -O logs/${SERVER_EXEC}_transitions_${LOGFILESUFFIX}.log
+        -O logs/${XCENC_EXEC}_transitions_${LOGFILESUFFIX}.log
 fi
 
 if [ $? = 0 ] && [ ! -z "${UPLOAD}" ]; then
-    ./dump_ssim_server.py \
+    ./${DUMP_EXEC}_server.py \
         ${DEBUG} \
         -n ${NWORKERS} \
         -o ${NOFFSET} \
@@ -85,5 +87,5 @@ if [ $? = 0 ] && [ ! -z "${UPLOAD}" ]; then
         -l ${FN_NAME} \
         -t ${PORTNUM} \
         -h ${REGION}.x.tita.nyc \
-        -O logs/dump_ssim_transitions_${LOGFILESUFFIX}.log
+        -O logs/${DUMP_EXEC}_transitions_${LOGFILESUFFIX}.log
 fi
