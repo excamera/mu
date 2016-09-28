@@ -100,11 +100,17 @@ class XCEnc7DumpState(OnePassState):
     command = "run:./xc-dump \"##TMPDIR##/output.ivf\" \"##TMPDIR##/final.state\""
     nextState = XCEnc7FinishState
 
+class XCEnc7CopyState(OnePassState):
+    extra = "(->prev.ivf)"
+    expect = "OK:RETVAL(0)"
+    command = "run:cp \"##TMPDIR##/output.ivf\" \"##TMPDIR##/prev.ivf\""
+    nextState = XCEnc7RecodeState
+
 class XCEnc7EncodeState(OnePassState):
     extra = "(vpxenc)"
     expect = "OK:RETRIEV"
     command = "run:./vpxenc --ivf -q --codec=vp8 --good --cpu-used=0 --end-usage=cq --min-q=0 --max-q=63 --cq-level={0} --buf-initial-sz=10000 --buf-optimal-sz=20000 --buf-sz=40000 --undershoot-pct=100 --passes=2 --auto-alt-ref=1 --threads=1 --token-parts=0 --tune=ssim --target-bitrate=4294967295 -o \"##TMPDIR##/output.ivf\" \"##TMPDIR##/input.y4m\" {1}"
-    nextState = XCEnc7RecodeState
+    nextState = XCEnc7CopyState
 
     def __init__(self, prevState, aNum=0):
         super(XCEnc7EncodeState, self).__init__(prevState, aNum)
