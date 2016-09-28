@@ -3,7 +3,7 @@
 . env_setup
 . k_fn_name
 
-if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ]; then
+if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
     echo "Usage: $0 n_workers n_offset y_val"
     exit 1
 fi
