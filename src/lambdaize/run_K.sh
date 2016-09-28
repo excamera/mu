@@ -37,14 +37,22 @@ if [ -z "$SSIM_ONLY" ]; then
 else
     SSIM_ONLY=1
 fi
+if [ -z "$FRAMES" ]; then
+    NUM_FRAMES=6
+else
+    NUM_FRAMES=$FRAMES
+fi
+FRAME_STR=$(printf "_%02d" $NUM_FRAMES)
 if [ -z "$SEVEN_FRAMES" ]; then
-    VID_SUFFIX="_06"
+    VID_SUFFIX=$FRAME_STR
     XCENC_EXEC="xcenc"
     DUMP_EXEC="dump_ssim"
+    FRAME_SWITCH=""
 else
     VID_SUFFIX=""
     XCENC_EXEC="xcenc7"
     DUMP_EXEC="dump_ssim7"
+    FRAME_SWITCH="-f $NUM_FRAMES"
 fi
 
 mkdir -p logs
@@ -56,6 +64,7 @@ if [ -z "$SSIM_ONLY" ]; then
     ./${XCENC_EXEC}_server.py \
         ${DEBUG} \
         ${UPLOAD} \
+        ${FRAME_SWITCH} \
         -n ${NWORKERS} \
         -o ${NOFFSET} \
         -X $((${NWORKERS} / 2)) \
@@ -81,7 +90,7 @@ if [ $? = 0 ] && [ ! -z "${UPLOAD}" ]; then
         -X $((${NWORKERS} / 2)) \
         -Y ${YVAL} \
         -K ${KFDIST} \
-        -v sintel-4k-y4m_06 \
+        -v sintel-4k-y4m${FRAME_STR} \
         -b excamera-${REGION} \
         -r ${REGION} \
         -l ${FN_NAME} \
