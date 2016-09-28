@@ -36,13 +36,13 @@ class DumpSSIMState(CommandListState):
     extra = "(dumping ssim)"
     pipelined = False
     nextState = FinalState
-    commandlist = [ ("OK:RETRIEVE(", "run:/usr/bin/perl ./y4m_chop_inplace.pl \"##TMPDIR##/orig.y4m\" \"##TMPDIR##/orig\" 12 yesplease")
-                  , ("OK:RETVAL(0)", "run:rm \"##TMPDIR##/orig.y4m\" \"##TMPDIR##/orig_00000{4}.y4m\"")
+    commandlist = [ ("OK:RETRIEVE(", "run:/usr/bin/perl ./y4m_chop_inplace.pl \"##TMPDIR##/orig.y4m\" \"##TMPDIR##/orig_\" 12 yesplease")
+                  , ("OK:RETVAL(0)", "run:rm \"##TMPDIR##/orig_00000{4}.y4m\"")
                   , ("OK:RETVAL(0)", "run:echo \"##TMPDIR##/xc.ivf\" | ./xc-decode-bundle {2} > \"##TMPDIR##/out.y4m\"")
-                  , ("OK:RETVAL(0)", "run:/usr/bin/perl ./y4m_chop_inplace.pl \"##TMPDIR##/out.y4m\" \"##TMPDIR##/out\" 12 yesplease")
-                  , ("OK:RETVAL(0)", "run:rm \"##TMPDIR##/out.y4m\" \"##TMPDIR##/out_00000{4}.y4m\"")
+                  , ("OK:RETVAL(0)", "run:/usr/bin/perl ./y4m_chop_inplace.pl \"##TMPDIR##/out.y4m\" \"##TMPDIR##/out_\" 12 yesplease")
+                  , ("OK:RETVAL(0)", "run:rm \"##TMPDIR##/out_00000{4}.y4m\"")
                   , ("OK:RETVAL(0)", "run:./xc-framesize \"##TMPDIR##/xc.ivf\" > \"##TMPDIR##/out.txt\"")
-                  , ("OK:RETVAL(0)", "run:./dump_ssim \"##TMPDIR##/out_00000{4}.y4m\" \"##TMPDIR##/orig_00000{4}.y4m\" >> \"##TMPDIR##/out.txt\"")
+                  , ("OK:RETVAL(0)", "run:./dump_ssim \"##TMPDIR##/out_00000{5}.y4m\" \"##TMPDIR##/orig_00000{5}.y4m\" >> \"##TMPDIR##/out.txt\"")
                   , ("OK:RETVAL(0)", "upload:{0}/out_ssim_{3}/{1}.txt\0##TMPDIR##/out.txt")
                   , ("OK:UPLOAD(", "quit:")
                   ]
@@ -57,10 +57,11 @@ class DumpSSIMState(CommandListState):
         else:
             stStr = "\"##TMPDIR##/final.state\""
         
-        split_str = str(self.actorNum % 2)
+        split_num = self.actorNum % 2
+        split_inv = 1 - split_num
 
         qStr = ServerInfo.quality_str
-        self.commands = [ s.format(vName, pStr, stStr, qStr, split_str) if s is not None else None for s in self.commands ]
+        self.commands = [ s.format(vName, pStr, stStr, qStr, split_inv, split_num) if s is not None else None for s in self.commands ]
 
 class DumpSSIMRetrieveState(CommandListState):
     extra = "(retrieving data)"
