@@ -70,10 +70,16 @@ class XCEnc7FinishState(CommandListState):
         qStr = ServerInfo.quality_str
         self.commands = [ s.format(vName, pStr, qStr) if s is not None else None for s in self.commands ]
 
-class XCEnc7RecodeState(CommandListState):
-    extra = "(pre-encode)"
-    pipelined = True
+class XCEnc7PreFinishState(OnePassState):
+    extra = "(working)"
+    expect = "OK:RETVAL(0)"
+    command = None
     nextState = XCEnc7FinishState
+
+class XCEnc7RecodeState(CommandListState):
+    extra = "(encode/wait)"
+    pipelined = True
+    nextState = XCEnc7PreFinishState
     commandlist = [ ("OK:RETVAL(0)", "seti:run_iter:{0}")
                   , "seti:send_statefile:{2}"
                   , "run:( while [ ! -f {1} ]; do sleep 0.025; done; echo \"hi\" ) | ./xc-enc -e -w 0.75 -i y4m -O \"##TMPDIR##/final.state\" -o \"##TMPDIR##/output.ivf\" -r -I {1} -p \"##TMPDIR##/prev.ivf\" \"##TMPDIR##/input.y4m\" 2>&1"
@@ -95,13 +101,13 @@ class XCEnc7RecodeState(CommandListState):
         self.commands = [ s.format(tell_pass_num, state_file, send_statefile) if s is not None else None for s in self.commands ]
 
 class XCEnc7DumpState(OnePassState):
-    extra = "(xc-dump)"
+    extra = "(vpxenc)"
     expect = "OK:RETVAL(0)"
     command = "run:./xc-terminate-chunk \"##TMPDIR##/prev.ivf\" \"##TMPDIR##/output.ivf\" \"##TMPDIR##/final.state\""
-    nextState = XCEnc7FinishState
+    nextState = XCEnc7PreFinishState
 
 class XCEnc7EncodeState(OnePassState):
-    extra = "(vpxenc)"
+    extra = "(d/l)"
     expect = "OK:RETRIEV"
     command = "run:./vpxenc --ivf -q --codec=vp8 --good --cpu-used=0 --end-usage=cq --min-q=0 --max-q=63 --cq-level={0} --buf-initial-sz=10000 --buf-optimal-sz=20000 --buf-sz=40000 --undershoot-pct=100 --passes=2 --auto-alt-ref=1 --threads=1 --token-parts=0 --tune=ssim --target-bitrate=4294967295 -o \"##TMPDIR##/prev.ivf\" \"##TMPDIR##/input.y4m\""
     nextState = XCEnc7RecodeState
@@ -110,14 +116,14 @@ class XCEnc7EncodeState(OnePassState):
         super(XCEnc7EncodeState, self).__init__(prevState, aNum)
 
         if ServerInfo.keyframe_distance < 2:
-            self.nextState = XCEnc7FinishState
+            self.nextState = XCEnc7PreFinishState
         elif self.actorNum % ServerInfo.keyframe_distance == 0:
             self.nextState = XCEnc7DumpState
 
         self.command = self.command.format(str(ServerInfo.quality_y))
 
 class XCEnc7StartState(CommandListState):
-    extra = "(dl/enc1)"
+    extra = "(starting)"
     nextState = XCEnc7EncodeState
     pipelined = True
     commandlist = [ ("OK:HELLO", "connect:{4}:HELLO_STATE:{2}:{1}:{3}")
