@@ -76,7 +76,7 @@ class XCEnc7RecodeState(CommandListState):
     nextState = XCEnc7FinishState
     commandlist = [ ("OK:RETVAL(0)", "seti:run_iter:{0}")
                   , "seti:send_statefile:{2}"
-                  , "run:( while [ ! -f {1} ]; do sleep 0.025; done; echo \"hi\" ) | ./xc-enc -7 -w 0.75 -i y4m -O \"##TMPDIR##/final.state\" -o \"##TMPDIR##/output.ivf\" -r -I {1} -p \"##TMPDIR##/prev.ivf\" \"##TMPDIR##/input.y4m\" 2>&1"
+                  , "run:( while [ ! -f {1} ]; do sleep 0.025; done; echo \"hi\" ) | ./xc-enc -e -w 0.75 -i y4m -O \"##TMPDIR##/final.state\" -o \"##TMPDIR##/output.ivf\" -r -I {1} -p \"##TMPDIR##/prev.ivf\" \"##TMPDIR##/input.y4m\" 2>&1"
                   ]
 
     def __init__(self, prevState, aNum=0):
