@@ -16,7 +16,7 @@ from libmu import SocketNB, Defs, util, handler
 ###
 def finished_run(msg, vals):
     # didn't run xc-enc, so nothing to do
-    if msg.find('xc-enc') == -1 and msg.find('xc-dump') == -1:
+    if msg.find('xc-enc') == -1 and msg.find('xc-dump') == -1 and msg.find('xc-terminate-chunk') == -1:
         return
 
     # we can delete $(($j - 2)).state now
