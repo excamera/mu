@@ -67,7 +67,7 @@ class DumpSSIMRetrieveState(CommandListState):
 
     def __init__(self, prevState, aNum):
         if aNum == 0:
-            self.commandlist = [ self.commandlist[i] for i in (0, 1, 2) ]
+            self.commandlist = [ self.commandlist[i] for i in (0, 1) ]
 
         super(DumpSSIMRetrieveState, self).__init__(prevState, aNum)
 
