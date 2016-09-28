@@ -98,19 +98,13 @@ class XCEnc7DumpState(OnePassState):
     extra = "(xc-dump)"
     expect = "OK:RETVAL(0)"
     command = "run:./xc-dump \"##TMPDIR##/output.ivf\" \"##TMPDIR##/final.state\""
-    nextState = XCEnc7RecodeState
-
-    def __init__(self, prevState, aNum=0):
-        super(XCEnc7DumpState, self).__init__(prevState, aNum)
-
-        if self.actorNum % ServerInfo.keyframe_distance == 0:
-            self.nextState = XCEnc7FinishState
+    nextState = XCEnc7FinishState
 
 class XCEnc7EncodeState(OnePassState):
     extra = "(vpxenc)"
     expect = "OK:RETRIEV"
     command = "run:./vpxenc --ivf -q --codec=vp8 --good --cpu-used=0 --end-usage=cq --min-q=0 --max-q=63 --cq-level={0} --buf-initial-sz=10000 --buf-optimal-sz=20000 --buf-sz=40000 --undershoot-pct=100 --passes=2 --auto-alt-ref=1 --threads=1 --token-parts=0 --tune=ssim --target-bitrate=4294967295 -o \"##TMPDIR##/output.ivf\" \"##TMPDIR##/input.y4m\" {1}"
-    nextState = XCEnc7DumpState
+    nextState = XCEnc7RecodeState
 
     def __init__(self, prevState, aNum=0):
         super(XCEnc7EncodeState, self).__init__(prevState, aNum)
@@ -121,6 +115,8 @@ class XCEnc7EncodeState(OnePassState):
 
         if ServerInfo.keyframe_distance < 2:
             self.nextState = XCEnc7FinishState
+        elif self.actorNum % ServerInfo.keyframe_distance == 0:
+            self.nextState = XCEnc7DumpState
 
         self.command = self.command.format(str(ServerInfo.quality_y), cpFirst)
 
@@ -155,9 +151,9 @@ class XCEnc7StartState(CommandListState):
         stateAddr = "%s:%d" % (ServerInfo.state_srv_addr, port_number)
 
         # send statefile unless we have no forward neighbor
-        send_statefile = 0
-        if effActNum == 0:
-            send_statefile = 1
+        send_statefile = 1
+        if ServerInfo.keyframe_distance - effActNum == 1:
+            send_statefile = 0
 
         self.commands = [ s.format(vName, pStr, rStr, nNum, stateAddr, send_statefile) if s is not None else None for s in self.commands ]
 
