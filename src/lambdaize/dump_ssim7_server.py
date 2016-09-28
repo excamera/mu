@@ -9,9 +9,8 @@ class ServerInfo(object):
     port_number = 13579
 
     quality_y = 30
-    quality_s = None
     quality_str = "30_x"
-    keyframe_distance = None
+    keyframe_distance = 16
 
     video_name = "sintel-1k-y4m_06"
     num_offset = 0
@@ -48,7 +47,7 @@ class DumpSSIMState(CommandListState):
         super(DumpSSIMState, self).__init__(prevState, aNum)
         vName = ServerInfo.video_name
         pStr = "%08d" % (self.actorNum + ServerInfo.num_offset)
-        if self.actorNum == 0:
+        if self.actorNum % ServerInfo.keyframe_distance == 0:
             stStr = ""
         else:
             stStr = "\"##TMPDIR##/final.state\""
@@ -66,7 +65,7 @@ class DumpSSIMRetrieveState(CommandListState):
                   ]
 
     def __init__(self, prevState, aNum):
-        if aNum == 0:
+        if aNum % ServerInfo.keyframe_distance == 0:
             self.commandlist = [ self.commandlist[i] for i in (0, 1) ]
 
         super(DumpSSIMRetrieveState, self).__init__(prevState, aNum)
