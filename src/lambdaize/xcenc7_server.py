@@ -54,7 +54,7 @@ class XCEnc7FinishState(CommandListState):
     # NOTE it's OK to pipeline this because we'll get three "UPLOAD(" responses in *some* order
     #      if bg_silent were false, we'd have to use a SuperpositionState to run the uploads in parallel
     nextState = XCEnc7QuitState
-    commandlist = [ ("OK:RETVAL(0)", "upload:{0}/out_{2}/{1}.ivf\0##TMPDIR##/output.ivf")
+    commandlist = [ (None, "upload:{0}/out_{2}/{1}.ivf\0##TMPDIR##/output.ivf")
                   , ("OK:UPLOAD(", "upload:{0}/final_state_{2}/{1}.state\0##TMPDIR##/final.state")
                   , ("OK:UPLOAD(", None)
                   ]
