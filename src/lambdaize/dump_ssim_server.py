@@ -39,10 +39,10 @@ class DumpSSIMState(CommandListState):
     nextState = FinalState
     commandlist = [ ("OK:RETRIEVE(", "run:echo \"##TMPDIR##/vpx.ivf\" | ./xc-decode-bundle > \"##TMPDIR##/out.y4m\"")
                   , ("OK:RETVAL(0)", "run:./xc-framesize \"##TMPDIR##/vpx.ivf\" > \"##TMPDIR##/out.txt\"")
-                  , ("OK:RETVAL(0)", "run:./dump_ssim -p 2 \"##TMPDIR##/out.y4m\" \"##TMPDIR##/orig.y4m\" >> \"##TMPDIR##/out.txt\"")
+                  , ("OK:RETVAL(0)", "run:./dump_ssim \"##TMPDIR##/out.y4m\" \"##TMPDIR##/orig.y4m\" >> \"##TMPDIR##/out.txt\"")
                   , ("OK:RETVAL(0)", "run:echo \"##TMPDIR##/xc.ivf\" | ./xc-decode-bundle {2} > \"##TMPDIR##/out.y4m\"")
                   , ("OK:RETVAL(0)", "run:./xc-framesize \"##TMPDIR##/xc.ivf\" >> \"##TMPDIR##/out.txt\"")
-                  , ("OK:RETVAL(0)", "run:./dump_ssim -p 2 \"##TMPDIR##/out.y4m\" \"##TMPDIR##/orig.y4m\" >> \"##TMPDIR##/out.txt\"")
+                  , ("OK:RETVAL(0)", "run:./dump_ssim \"##TMPDIR##/out.y4m\" \"##TMPDIR##/orig.y4m\" >> \"##TMPDIR##/out.txt\"")
                   , ("OK:RETVAL(0)", "upload:{0}/out_ssim_{3}/{1}.txt\0##TMPDIR##/out.txt")
                   , ("OK:UPLOAD(", "quit:")
                   ]
