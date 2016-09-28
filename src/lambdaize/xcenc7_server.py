@@ -109,18 +109,20 @@ class XCEnc7DumpState(OnePassState):
 class XCEnc7EncodeState(OnePassState):
     extra = "(d/l)"
     expect = "OK:RETRIEV"
-    command = "run:./vpxenc --ivf -q --codec=vp8 --good --cpu-used=0 --end-usage=cq --min-q=0 --max-q=63 --cq-level={0} --buf-initial-sz=10000 --buf-optimal-sz=20000 --buf-sz=40000 --undershoot-pct=100 --passes=2 --auto-alt-ref=1 --threads=1 --token-parts=0 --tune=ssim --target-bitrate=4294967295 -o \"##TMPDIR##/prev.ivf\" \"##TMPDIR##/input.y4m\""
+    command = "run:./vpxenc --ivf -q --codec=vp8 --good --cpu-used=0 --end-usage=cq --min-q=0 --max-q=63 --cq-level={0} --buf-initial-sz=10000 --buf-optimal-sz=20000 --buf-sz=40000 --undershoot-pct=100 --passes=2 --auto-alt-ref=1 --threads=1 --token-parts=0 --tune=ssim --target-bitrate=4294967295 -o \"##TMPDIR##/{1}\" \"##TMPDIR##/input.y4m\""
     nextState = XCEnc7RecodeState
 
     def __init__(self, prevState, aNum=0):
         super(XCEnc7EncodeState, self).__init__(prevState, aNum)
 
+        outfile = "prev.ivf"
         if ServerInfo.keyframe_distance < 2:
             self.nextState = XCEnc7PreFinishState
+            outfile = "output.ivf"
         elif self.actorNum % ServerInfo.keyframe_distance == 0:
             self.nextState = XCEnc7DumpState
 
-        self.command = self.command.format(str(ServerInfo.quality_y))
+        self.command = self.command.format(str(ServerInfo.quality_y), outfile)
 
 class XCEnc7StartState(CommandListState):
     extra = "(starting)"
