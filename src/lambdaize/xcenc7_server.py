@@ -60,7 +60,7 @@ class XCEnc7FinishState(CommandListState):
                   ]
 
     def __init__(self, prevState, aNum=0):
-        if not ServerInfo.upload_states:
+        if not ServerInfo.upload_states or ServerInfo.keyframe_distance < 2:
             self.commandlist = [ self.commandlist[i] for i in (0, 3) ]
 
         super(XCEnc7FinishState, self).__init__(prevState, aNum)
