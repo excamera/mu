@@ -16,7 +16,7 @@ from libmu import SocketNB, Defs, util, handler
 ###
 def finished_run(msg, vals):
     # didn't run xc-enc, so nothing to do
-    if msg.find('xc-enc') == -1 and msg.find('xc-dump') == -1:
+    if msg.find('xc-enc') == -1 and msg.find('xc-dump') == -1 and msg.find('xc-terminate-chunk') == -1:
         return
 
     # we can delete $(($j - 2)).state now
@@ -128,7 +128,7 @@ def make_cmdstring(msg, vals):
     # statefile
     if vals['run_iter'] > 0 and vals['expect_statefile']:
         instatefile = "##TMPDIR##/%d.state" % (vals['run_iter'] - 1)
-        instatewait = '( while [ ! -f "%s" ]; do sleep 1; done; echo "hi" ) | ' % instatefile
+        instatewait = '( while [ ! -f "%s" ]; do sleep 0.025; done; echo "hi" ) | ' % instatefile
         instateswitch = '-r -I "%s" -p "##TMPDIR##/prev.ivf"' % instatefile
 
         if vals['run_iter'] > 1:

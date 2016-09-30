@@ -1,8 +1,9 @@
 #!/usr/bin/perl -w
 use strict;
+use bytes;
 
-if (scalar(@ARGV) != 3) {
-    die "Usage: $0 <infile> <outpattern> <nframes>";
+if (scalar(@ARGV) < 3) {
+    die "Usage: $0 <infile> <outpattern> <nframes> ['yesplease']";
 }
 
 my $nframes = int($ARGV[2]);
@@ -12,7 +13,19 @@ if ($nframes == 0) {
 
 
 open my $infile, "<" . $ARGV[0] or die "Could not open $ARGV[0]: $!";
-my $header = <$infile>;
+my $indata;
+{
+    undef $/;
+    $indata = <$infile>;
+}
+close($infile);
+
+# if we're asked to do it in place, delete the input file before continuing
+if (scalar(@ARGV) > 3 && $ARGV[3] eq "yesplease") {
+    unlink($ARGV[0]);
+}
+
+my $header = substr($indata, 0, index($indata, "\n") + 1, "");
 my ($width, $height, $space);
                # YUV4MPEG2 W854      H480      F24:1          Ip A0:0           C420jpeg          XYSCSS=420JPEG
 if ($header =~ /^YUV4MPEG2 W([0-9]+) H([0-9]+) F[0-9]+:[0-9]+ I. A[0-9]+:[0-9]+ C([0-9]{3})[a-z]*.*$/) {
@@ -37,8 +50,11 @@ if ($space eq '420') {
 }
 
 my $outfile;
-for (my $i = 0; <$infile>; $i++) {
-    # <$infile> reads up to next linebreak, which is the start of the next frame by def'n of YUV4MPEG2 format
+for (my $i = 0; length($indata) > 0; $i++) {
+    $_ = substr($indata, 0, index($indata, "\n") + 1, "");
+    if (length($_) != 6) {
+        die "Expected to get FRAME\\n, got nothing";
+    }
 
     # open a new file every $nframes frames
     if ($i % $nframes == 0) {
@@ -49,9 +65,11 @@ for (my $i = 0; <$infile>; $i++) {
     }
 
     my $nextframe;
-    my $nread = read($infile, $nextframe, $readlen);
-    if ($nread != $readlen) {
-        die "ERROR: tried to read $readlen, read $nread";
+    my $foo = length($indata);
+    if (length($indata) < $readlen) {
+        die ("ERROR: tried to read $readlen from file, only " . length($indata) . " available.");
+    } else {
+        $nextframe = substr($indata, 0, $readlen, '');
     }
 
     print $outfile $_;
@@ -60,4 +78,3 @@ for (my $i = 0; <$infile>; $i++) {
 
 close $outfile if defined($outfile);
 print STDERR "\n";
-close $infile;
