@@ -26,4 +26,4 @@ after_failure:
   - cat mu-0.01/_build/src/tests/test-suite.log
 
 notifications:
-  slack: keithw:bq7WABbx9cSlgMM8vljjOPh5
+  slack: ucsdnetworking:aWjhwIqXIDEYCaOmFMiql8A6
