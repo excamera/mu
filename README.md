@@ -46,7 +46,7 @@ To start, let's build the [mu](https://github.com/excamera/mu) repository:
     ./configure
     make -j$(nproc)
 
-The other thing we'll need is the [daala\_tools](https://github.com/alfalfa/daala_tools) repo,
+The other thing we'll need is the [daala\_tools](https://github.com/excamera/daala_tools) repo,
 which contains the `png2y4m` tool we are going to run on each lambda worker.
 
 **Important:** note `STATIC=1` in the `make` invocation. The
@@ -55,7 +55,7 @@ probably does not have the same system libraries as our machine, so to be safe, 
 use statically linked binaries on lambda workers.
 
     cd /tmp/mu_example
-    git clone https://github.com/alfalfa/daala_tools
+    git clone https://github.com/excamera/daala_tools
     cd daala_tools
     make -j$(nproc) STATIC=1
 

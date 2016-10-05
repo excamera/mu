@@ -1,6 +1,6 @@
 # Running `xc-enc` on Lambda #
 
-Running [xc-enc](https://github.com/alfalfa/alfalfa) on Lambda takes a few special steps compared to
+Running [xc-enc](https://github.com/excamera/alfalfa) on Lambda takes a few special steps compared to
 running other computations, e.g., [png2y4m](https://github.com/excamera/mu/tree/master/README.md).
 This is because the workers need to communicate with one another; to do this, they need help
 with NAT traversal.
@@ -12,11 +12,11 @@ packages, set up your environment, etc).
 ## Building binaries ##
 
 To run xc-enc, we need the xc-enc and comp-states binary, both of which are part of
-[alfalfa](https://github.com/alfalfa/alfalfa). We need to statically link them, like so:
+[alfalfa](https://github.com/excamera/alfalfa). We need to statically link them, like so:
 
     mkdir -p /tmp/mu_example/alfalfa
     cd /tmp/mu_example
-    git clone https://github.com/alfalfa/alfalfa
+    git clone https://github.com/excamera/alfalfa
     cd alfalfa
     ./autogen.sh
     ./configure --enable-all-static
