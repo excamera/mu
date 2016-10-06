@@ -1,5 +1,24 @@
 #!/usr/bin/python
 
+###
+# This server implements the state machine for retrieving
+# a chunk of video and chop it into 7frames
+#
+# State Machine Description :
+#  Co-ordinating mk7frames
+#   -> Configure the lambda with instance specific-settings
+#   -> Retrieve a chunk from S3
+#   -> retrieve a chunk
+#   -> run a script that chops it into pieces (y4m_chop.pl)
+#   -> retrieve another chunk
+#   -> run a command that glues together two chunks
+#   -> Upload the result to S3
+#
+# State Machine Transitions :
+#  Make7FrameState
+#    -> FinalState
+###
+
 import os
 
 from libmu import server, TerminalState, CommandListState
