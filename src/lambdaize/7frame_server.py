@@ -1,22 +1,25 @@
 #!/usr/bin/python
 
 ###
-# This server implements the state machine for retrieving
-# a chunk of video and chop it into 7frames
+# This server retrieves two sequential 6-frame chunks and creates a 7-frame chunk
+# by appending the second chunk to the final frame of the first chunk.
 #
-# State Machine Description :
-#  Co-ordinating mk7frames
-#   -> Configure the lambda with instance specific-settings
-#   -> Retrieve a chunk from S3
-#   -> retrieve a chunk
-#   -> run a script that chops it into pieces (y4m_chop.pl)
-#   -> retrieve another chunk
-#   -> run a command that glues together two chunks
-#   -> Upload the result to S3
-#
-# State Machine Transitions :
+# State machine transitions:
 #  Make7FrameState
 #    -> FinalState
+#
+# State-by-state description:
+#   Make7FrameState (see `commandlist` property, below).
+#     1. Retrieve a 6-frame Y4M from S3 (i.e., chunk i).
+#     2. Split the Y4M from #1 into individual Y4Ms per frame (see <mu>/bin/y4m_chop.pl).
+#     3. Delete all Y4Ms from #2 except the last frame in the sequence.
+#     4. Retrieve the next 6-frame Y4M (i.e., chunk i+1).
+#     5. Create a 7-frame Y4M by append the Y4M from step #5 to the Y4M remaining after step #3.
+#     6. Upload the new Y4M file to S3.
+#     7. Exit.
+#   FinalState:
+#     (nothing)
+#
 ###
 
 import os
