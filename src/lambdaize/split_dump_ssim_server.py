@@ -12,9 +12,10 @@ class ServerInfo(object):
     quality_str = "30_x"
     keyframe_distance = 16
 
-    video_name = "sintel-4k-y4m_24"
+    video_name = "sintel-4k-y4m"
     num_offset = 0
     num_parts = 1
+    num_frames = 12
     overprovision = 25
 
     lambda_function = "vpxenc"
@@ -36,10 +37,10 @@ class DumpSSIMState(CommandListState):
     extra = "(dumping ssim)"
     pipelined = False
     nextState = FinalState
-    commandlist = [ ("OK:RETRIEVE(", "run:/usr/bin/perl ./y4m_chop_inplace.pl \"##TMPDIR##/orig.y4m\" \"##TMPDIR##/orig_\" 12 yesplease")
+    commandlist = [ ("OK:RETRIEVE(", "run:/usr/bin/perl ./y4m_chop_inplace.pl \"##TMPDIR##/orig.y4m\" \"##TMPDIR##/orig_\" {6} yesplease")
                   , ("OK:RETVAL(0)", "run:rm \"##TMPDIR##/orig_00000{4}.y4m\"")
                   , ("OK:RETVAL(0)", "run:echo \"##TMPDIR##/xc.ivf\" | ./xc-decode-bundle {2} > \"##TMPDIR##/out.y4m\"")
-                  , ("OK:RETVAL(0)", "run:/usr/bin/perl ./y4m_chop_inplace.pl \"##TMPDIR##/out.y4m\" \"##TMPDIR##/out_\" 12 yesplease")
+                  , ("OK:RETVAL(0)", "run:/usr/bin/perl ./y4m_chop_inplace.pl \"##TMPDIR##/out.y4m\" \"##TMPDIR##/out_\" {6} yesplease")
                   , ("OK:RETVAL(0)", "run:rm \"##TMPDIR##/out_00000{4}.y4m\"")
                   , ("OK:RETVAL(0)", "run:./xc-framesize \"##TMPDIR##/xc.ivf\" > \"##TMPDIR##/out.txt\"")
                   , ("OK:RETVAL(0)", "run:./dump_ssim \"##TMPDIR##/out_00000{5}.y4m\" \"##TMPDIR##/orig_00000{5}.y4m\" >> \"##TMPDIR##/out.txt\"")
@@ -49,7 +50,7 @@ class DumpSSIMState(CommandListState):
 
     def __init__(self, prevState, aNum=0):
         super(DumpSSIMState, self).__init__(prevState, aNum)
-        vName = ServerInfo.video_name
+        vName = ServerInfo.video_name + '_' + str(ServerInfo.num_frames)
         pStr = "%08d" % (self.actorNum + 2 * ServerInfo.num_offset)
 
         if (self.actorNum // 2) % ServerInfo.keyframe_distance == 0:
@@ -60,8 +61,10 @@ class DumpSSIMState(CommandListState):
         split_num = self.actorNum % 2
         split_inv = 1 - split_num
 
+        nfStr = str(ServerInfo.num_frames // 2)
+
         qStr = ServerInfo.quality_str
-        self.commands = [ s.format(vName, pStr, stStr, qStr, split_inv, split_num) if s is not None else None for s in self.commands ]
+        self.commands = [ s.format(vName, pStr, stStr, qStr, split_inv, split_num, nfStr) if s is not None else None for s in self.commands ]
 
 class DumpSSIMRetrieveState(CommandListState):
     extra = "(retrieving data)"
@@ -79,7 +82,7 @@ class DumpSSIMRetrieveState(CommandListState):
 
         super(DumpSSIMRetrieveState, self).__init__(prevState, aNum)
 
-        vName = ServerInfo.video_name
+        vName = ServerInfo.video_name + '_' + str(ServerInfo.num_frames)
         pNum = (self.actorNum // 2) + ServerInfo.num_offset
         pStr = "%08d" % pNum
         prStr = "%08d" % (pNum - 1)

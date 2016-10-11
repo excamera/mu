@@ -8,6 +8,8 @@ if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ]; then
     exit 1
 fi
 
+HOST_IP=$(wget -q -O - http://169.254.169.254/latest/meta-data/public-ipv4)
+
 KFDIST=$1
 NWORKERS=$2
 NOFFSET=$3
@@ -46,13 +48,15 @@ FRAME_STR=$(printf "_%02d" $NUM_FRAMES)
 if [ -z "$SEVEN_FRAMES" ]; then
     VID_SUFFIX=$FRAME_STR
     XCENC_EXEC="xcenc"
-    DUMP_EXEC="dump_ssim"
+    DUMP_EXEC="split_dump_ssim"
     FRAME_SWITCH=""
+    SSIM_FRAME_SWITCH="-f $NUM_FRAMES"
 else
     VID_SUFFIX=""
     XCENC_EXEC="xcenc7"
     DUMP_EXEC="dump_ssim7"
     FRAME_SWITCH="-f $NUM_FRAMES"
+    SSIM_FRAME_SWITCH=$FRAME_SWITCH
 fi
 
 mkdir -p logs
@@ -75,26 +79,27 @@ if [ -z "$SSIM_ONLY" ]; then
         -r ${REGION} \
         -l ${FN_NAME} \
         -t ${PORTNUM} \
-        -h ${REGION}.x.tita.nyc \
+        -h ${HOST_IP} \
         -T ${STATEPORT} \
         -R ${STATETHREADS} \
-        -H ${REGION}.x.tita.nyc \
+        -H ${HOST_IP} \
         -O logs/${XCENC_EXEC}_transitions_${LOGFILESUFFIX}.log
 fi
 
 if [ $? = 0 ] && [ ! -z "${UPLOAD}" ]; then
     ./${DUMP_EXEC}_server.py \
         ${DEBUG} \
+        ${SSIM_FRAME_SWITCH} \
         -n ${NWORKERS} \
         -o ${NOFFSET} \
         -X $((${NWORKERS} / 2)) \
         -Y ${YVAL} \
         -K ${KFDIST} \
-        -v sintel-4k-y4m${FRAME_STR} \
+        -v sintel-4k-y4m \
         -b excamera-${REGION} \
         -r ${REGION} \
         -l ${FN_NAME} \
         -t ${PORTNUM} \
-        -h ${REGION}.x.tita.nyc \
+        -h ${HOST_IP} \
         -O logs/${DUMP_EXEC}_transitions_${LOGFILESUFFIX}.log
 fi
