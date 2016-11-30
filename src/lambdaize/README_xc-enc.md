@@ -170,3 +170,4 @@ So:
 
 Output ivf files will appear in `s3://bucketName/videoName/out/%08d.ivf`, and the output from
 comp-states will appear in `s3://bucketName/videoName/comp_txt/%08d.txt`.
+
