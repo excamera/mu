@@ -22,11 +22,12 @@
 import os
 
 from libmu import server, TerminalState, CommandListState, ForLoopState
+from extract_metadata import MetadataExtraction
 
 class ServerInfo(object):
     port_number = 13579
 
-    video_name       = "sintel-1k"
+    video_name       = ""
     num_frames       = 6
     num_offset       = 0
     num_parts        = 1
@@ -34,10 +35,10 @@ class ServerInfo(object):
     regions          = ["us-east-1"]
     bucket           = "excamera-us-east-1"
     video_mp4_name   = "input.mp4"
-    in_format        = "png16"
+    in_format        = ""
     out_file         = None
     profiling        = None
-    s3_url_formatter = "http://s3-%s.amazonaws.com/%s/%s/%s"
+    s3_url_formatter = "http://s3-%s.amazonaws.com/%s/%s"
 
     cacert = None
     srvcrt = None
@@ -64,27 +65,27 @@ class FfmpegVideoSplitterRetrieveAndRunState(CommandListState):
                   , None
                   ]
 
+    def get_video_metadata(self, bucket, key, number, actorNum):
+      metadata = MetadataExtraction(bucket, key)
+      metadata.invoke_metadata_extraction()
+      return metadata
+
+    def get_chunk_point_in_duration(self, metadata, number, actorNum):
+      video_duration = metadata.get_duration()
+      return video_duration
+
     def __init__(self, prevState, aNum=0):
         super(FfmpegVideoSplitterRetrieveAndRunState, self).__init__(prevState, aNum)
         inName         = "%s-%s" % (ServerInfo.video_name, ServerInfo.in_format)
         outName        = "%s-%s" % (ServerInfo.video_mp4_name, "png-split")
         number         = 1 + ServerInfo.num_frames * (self.actorNum + ServerInfo.num_offset) + self.info['retrieve_iter']
         video_mp4_name = ServerInfo.video_mp4_name
-        video_url      = ServerInfo.s3_url_formatter % (ServerInfo.regions[0], ServerInfo.bucket, ServerInfo.inName, ServerInfo.video_mp4_name)
-        metadata       = get_video_metadata(ServerInfo.bucket, ServerInfo.video_mp4_name)
-        chunk_point    = json_metadata.get_chunk_point_in_duration(json_metadata, number, self.actorNum)
+        video_url      = ServerInfo.s3_url_formatter % (ServerInfo.regions[0], ServerInfo.bucket, ServerInfo.video_mp4_name)
+        metadata       = self.get_video_metadata(ServerInfo.bucket, ServerInfo.video_mp4_name, number, self.actorNum)
+        chunk_point    = self.get_chunk_point_in_duration(metadata, number, self.actorNum)
         frames         = ServerInfo.num_frames
         self.commands  = [ s.format(inName, outName, "%08d" % number) if s is not None else None for s in self.commands ]
    
-    def get_video_metadata(self, bucket, key, number, actorNum):
-      metadata = MetadataExtraction()
-      metadata.invoke_metadata_extraction(bucket, key)
-      return metadata
-
-    def get_chunk_point_in_duration(self, json_metadata, number, actorNum):
-      video_duration = json_metadata.get_duration()
-      return video_duration
-
 class FfmpegVideoSplitterRetrieveLoopState(ForLoopState):
     extra     = "(retrieve loop)"
     loopState = FfmpegVideoSplitterRetrieveAndRunState

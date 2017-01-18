@@ -6,11 +6,14 @@ import simplejson as json
 from optparse import OptionParser
 
 class MetadataExtraction(object):
-    def __init__(self):
+    def __init__(self, bucket, key):
       self.SIGNED_URL_EXPIRATION = 300     # The number of seconds that the Signed URL is valid
-      self.logger = logging.getself.logger('boto3')
+      self.logger                = logging.getLogger('boto3')
       self.logger.setLevel(logging.INFO)
-      self.s3_client = boto3.client('s3')
+      self.s3_client             = boto3.client('s3')
+      self.bucket                = bucket
+      self.key                   = key
+      self.json_metadata         = {}
 
     def lambda_handler(self, event, context):
       # Loop through records provided by S3 Event trigger
@@ -20,7 +23,7 @@ class MetadataExtraction(object):
       bucket = event['bucket']
       self.logger.info("Bucket: {} \t Key: {}".format(bucket, key))
       # Generate a signed URL for the uploaded asset
-      signed_url = get_signed_url(self.SIGNED_URL_EXPIRATION, bucket, key)
+      signed_url = self.get_signed_url(self.SIGNED_URL_EXPIRATION, bucket, key)
       self.logger.info("Signed URL: {}".format(signed_url))
       # Launch MediaInfo
       # Pass the signed URL of the uploaded asset to MediaInfo as an input
@@ -30,7 +33,7 @@ class MetadataExtraction(object):
       xml_output = subprocess.check_output(["mediainfo", "--full", "--output=XML", signed_url])
       self.logger.info("Output: {}".format(xml_output))
       xml_json = xmltodict.parse(xml_output)
-      return write_job_spec_to_file(xml_json, bucket, key)
+      return self.write_job_spec_to_file(xml_json, bucket, key)
  
     def write_job_spec_to_file(self, xml_json, bucket, key):
       try:
@@ -40,12 +43,12 @@ class MetadataExtraction(object):
         ofd.write(json_map)
         ofd.close()
         self.s3_client.upload_file("./metadata.txt", bucket, key + "metadata.txt")
-        return json_map
+        return json.loads(json.dumps(xml_json))
       except Exception as inst:
         print (type(inst))
         print (inst.args)
         print (inst)
-        return json_map
+        return json.loads(json.dumps(xml_json))
 
     def get_signed_url(self, expires_in, bucket, obj):
       """
@@ -68,9 +71,10 @@ class MetadataExtraction(object):
         'bucket' : self.bucket,
         'key' :self. key
       }
-      self.json_metadata = lambda_handler(event, {})
+      self.json_metadata = self.lambda_handler(event, {})
 
     def get_duration(self):
-      print (len(self.json_metadata))
-      duration = self.json_metadata["Mediainfo"]["File"]["track"]["Duration"][4]
+      print (type(self.json_metadata))
+      print (self.json_metadata)
+      duration = self.json_metadata['Mediainfo']['File']['track'][0]['Duration'][4]
       return duration
