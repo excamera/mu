@@ -72,6 +72,7 @@ class GrayScaleRetrieveAndRunState(CommandListState):
         outName       = "%s-%s-%s" % (ServerInfo.video_name, ServerInfo.in_format, "grayscale")
         number        = 1 + ServerInfo.num_frames * (self.actorNum + ServerInfo.num_offset) + self.info['retrieve_iter']
         self.commands = [ s.format(inName, outName, "%08d" % number) if s is not None else None for s in self.commands ]
+	print (self.commands)
 
 class GrayScaleRetrieveLoopState(ForLoopState):
     extra     = "(retrieve loop)"

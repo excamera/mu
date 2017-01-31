@@ -27,18 +27,18 @@ from extract_metadata import MetadataExtraction
 class ServerInfo(object):
     port_number = 13579
 
-    video_name       = ""
-    num_frames       = 6
+    video_name       = "video"
+    num_frames       = 1
     num_offset       = 0
     num_parts        = 1
     lambda_function  = "ffmpeg"
     regions          = ["us-east-1"]
     bucket           = "excamera-us-east-1"
     video_mp4_name   = "input.mp4"
-    in_format        = ""
+    in_format        = "mp4"
     out_file         = None
     profiling        = None
-    s3_url_formatter = "http://s3-%s.amazonaws.com/%s/%s"
+    s3_url_formatter = "http://s3-%s.amazonaws.com/%s/%s/%s"
 
     cacert = None
     srvcrt = None
@@ -55,11 +55,9 @@ class FfmpegVideoSplitterQuitState(CommandListState):
 
 class FfmpegVideoSplitterRetrieveAndRunState(CommandListState):
     extra       = "(retrieve video chunk, split into images and upload)"
-    commandlist = [ (None, "set:inkey:{3}")
-                  , "set:targfile:##TMPDIR##/{2}.png"
+    commandlist = [ (None, "set:targfile:##TMPDIR##/{2}.png")
                   , "set:cmdoutfile:##TMPDIR##/{2}.png"
                   , "set:outkey:{1}/{2}.png"
-                  , "retrieve:"
                   , "run:./ffmpeg -i {4} -ss {6} -vframes {7} -f image2 image%03d.png"
                   , ("OK:RETVAL(0)", "upload:")
                   , None
@@ -80,11 +78,12 @@ class FfmpegVideoSplitterRetrieveAndRunState(CommandListState):
         outName        = "%s-%s" % (ServerInfo.video_mp4_name, "png-split")
         number         = 1 + ServerInfo.num_frames * (self.actorNum + ServerInfo.num_offset) + self.info['retrieve_iter']
         video_mp4_name = ServerInfo.video_mp4_name
-        video_url      = ServerInfo.s3_url_formatter % (ServerInfo.regions[0], ServerInfo.bucket, ServerInfo.video_mp4_name)
+        video_url      = ServerInfo.s3_url_formatter % (ServerInfo.regions[0], ServerInfo.bucket, inName, ServerInfo.video_mp4_name)
         metadata       = self.get_video_metadata(ServerInfo.bucket, ServerInfo.video_mp4_name, number, self.actorNum)
         chunk_point    = self.get_chunk_point_in_duration(metadata, number, self.actorNum)
         frames         = ServerInfo.num_frames
-        self.commands  = [ s.format(inName, outName, "%08d" % number) if s is not None else None for s in self.commands ]
+	print (self.commands)
+        self.commands  = [ s.format(inName, outName, "%08d" % number, video_mp4_name, video_url, metadata, chunk_point, frames) if s is not None else None for s in self.commands ]
    
 class FfmpegVideoSplitterRetrieveLoopState(ForLoopState):
     extra     = "(retrieve loop)"
