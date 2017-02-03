@@ -21,6 +21,7 @@
 
 import os
 
+import signurl
 from libmu import server, TerminalState, CommandListState, ForLoopState
 from extract_metadata import MetadataExtraction
 
@@ -39,6 +40,8 @@ class ServerInfo(object):
     out_file         = None
     profiling        = None
     s3_url_formatter = "http://s3-%s.amazonaws.com/%s/%s/%s"
+    chunk_duration   = "%s:%s:%s"
+    chunk_duration_s = 5
 
     cacert = None
     srvcrt = None
@@ -58,7 +61,7 @@ class FfmpegVideoSplitterRetrieveAndRunState(CommandListState):
     commandlist = [ (None, "set:targfile:##TMPDIR##/{2}.png")
                   , "set:cmdoutfile:##TMPDIR##/{2}.png"
                   , "set:outkey:{1}/{2}.png"
-                  , "run:./ffmpeg -i {4} -ss {6} -vframes {7} -f image2 image%03d.png"
+                  , "run:./ffmpeg -i '{8}' -ss {6} -t {7} -frames 10 '%08d.png'"
                   , ("OK:RETVAL(0)", "upload:")
                   , None
                   ]
@@ -69,8 +72,22 @@ class FfmpegVideoSplitterRetrieveAndRunState(CommandListState):
       return metadata
 
     def get_chunk_point_in_duration(self, metadata, number, actorNum):
-      video_duration = metadata.get_duration()
-      return video_duration
+      re_exp_for_duration = "(\d{2}):(\d{2}):(\d{2})\.\d+"
+      re_length           = re.compile(re_exp_for_duration)
+      video_duration      = metadata.get_duration()
+      matches             = re_length.search(video_duration)
+      if matches:
+        video_length      = int(matches.group(1)) * 3600 + \
+                            int(matches.group(2)) * 60 + \
+                            int(matches.group(3))
+	split_count       = int(math.ceil(video_length/float(ServerInfo.chunk_duration_s)))
+	split_start       = ServerInfo.chunk_duration_s * actorNum
+        return str(split_start)
+      else:
+	return str(ServerInfo.chunk_duration_s)
+
+    def sign(self, bucket, key):
+      return signurl.invoke_sign(bucket, key)
 
     def __init__(self, prevState, aNum=0):
         super(FfmpegVideoSplitterRetrieveAndRunState, self).__init__(prevState, aNum)
@@ -81,9 +98,10 @@ class FfmpegVideoSplitterRetrieveAndRunState(CommandListState):
         video_url      = ServerInfo.s3_url_formatter % (ServerInfo.regions[0], ServerInfo.bucket, inName, ServerInfo.video_mp4_name)
         metadata       = self.get_video_metadata(ServerInfo.bucket, ServerInfo.video_mp4_name, number, self.actorNum)
         chunk_point    = self.get_chunk_point_in_duration(metadata, number, self.actorNum)
-        frames         = ServerInfo.num_frames
+        chunk_size     = ServerInfo.chunk_duration_s
+	signed_url     = self.sign(ServerInfo.bucket, ServerInfo.video_mp4_name)
 	print (self.commands)
-        self.commands  = [ s.format(inName, outName, "%08d" % number, video_mp4_name, video_url, metadata, chunk_point, frames) if s is not None else None for s in self.commands ]
+        self.commands  = [ s.format(inName, outName, "%08d" % number, video_mp4_name, video_url, metadata, chunk_point, frames, signed_url) if s is not None else None for s in self.commands ]
    
 class FfmpegVideoSplitterRetrieveLoopState(ForLoopState):
     extra     = "(retrieve loop)"
