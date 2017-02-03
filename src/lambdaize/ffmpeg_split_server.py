@@ -20,6 +20,8 @@
 ###
 
 import os
+import re
+import math
 
 import signurl
 from libmu import server, TerminalState, CommandListState, ForLoopState
@@ -41,7 +43,7 @@ class ServerInfo(object):
     profiling        = None
     s3_url_formatter = "http://s3-%s.amazonaws.com/%s/%s/%s"
     chunk_duration   = "%s:%s:%s"
-    chunk_duration_s = 5
+    chunk_duration_s = 1
 
     cacert = None
     srvcrt = None
@@ -58,10 +60,13 @@ class FfmpegVideoSplitterQuitState(CommandListState):
 
 class FfmpegVideoSplitterRetrieveAndRunState(CommandListState):
     extra       = "(retrieve video chunk, split into images and upload)"
-    commandlist = [ (None, "set:targfile:##TMPDIR##/{2}.png")
-                  , "set:cmdoutfile:##TMPDIR##/{2}.png"
-                  , "set:outkey:{1}/{2}.png"
-                  , "run:./ffmpeg -i '{8}' -ss {6} -t {7} -frames 10 '%08d.png'"
+    commandlist = [ (None, "set:fromfile:##TMPDIR##/{2}.jpg")
+                  , "set:cmdoutfile:##TMPDIR##/{2}.jpg"
+		  , "set:targfile:##TMPDIR##/{2}.jpg"
+                  , "set:outkey:{1}/{2}.jpg"
+		  , "run:./ffmpeg -version"
+                  , "run:./ffmpeg -i '{8}' -ss {6} -t {7} -vframes 1 -f image2pipe -c:v mjpeg ##TMPDIR##/{2}.jpg"
+		  , "run:ls ##TMPDIR##"
                   , ("OK:RETVAL(0)", "upload:")
                   , None
                   ]
@@ -87,12 +92,13 @@ class FfmpegVideoSplitterRetrieveAndRunState(CommandListState):
 	return str(ServerInfo.chunk_duration_s)
 
     def sign(self, bucket, key):
-      return signurl.invoke_sign(bucket, key)
+      signed_url = signurl.invoke_sign(bucket, key)
+      return signed_url.replace("https", "http")
 
     def __init__(self, prevState, aNum=0):
         super(FfmpegVideoSplitterRetrieveAndRunState, self).__init__(prevState, aNum)
         inName         = "%s-%s" % (ServerInfo.video_name, ServerInfo.in_format)
-        outName        = "%s-%s" % (ServerInfo.video_mp4_name, "png-split")
+        outName        = "%s-%s" % (inName, "png-split")
         number         = 1 + ServerInfo.num_frames * (self.actorNum + ServerInfo.num_offset) + self.info['retrieve_iter']
         video_mp4_name = ServerInfo.video_mp4_name
         video_url      = ServerInfo.s3_url_formatter % (ServerInfo.regions[0], ServerInfo.bucket, inName, ServerInfo.video_mp4_name)
@@ -101,7 +107,7 @@ class FfmpegVideoSplitterRetrieveAndRunState(CommandListState):
         chunk_size     = ServerInfo.chunk_duration_s
 	signed_url     = self.sign(ServerInfo.bucket, ServerInfo.video_mp4_name)
 	print (self.commands)
-        self.commands  = [ s.format(inName, outName, "%08d" % number, video_mp4_name, video_url, metadata, chunk_point, frames, signed_url) if s is not None else None for s in self.commands ]
+        self.commands  = [ s.format(inName, outName, "%08d" % number, video_mp4_name, video_url, metadata, chunk_point, chunk_size, signed_url) if s is not None else None for s in self.commands ]
    
 class FfmpegVideoSplitterRetrieveLoopState(ForLoopState):
     extra     = "(retrieve loop)"

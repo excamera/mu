@@ -74,7 +74,7 @@ class MetadataExtraction(object):
       self.json_metadata = self.lambda_handler(event, {})
 
     def get_duration(self):
-      print (type(self.json_metadata))
-      print (self.json_metadata)
+      #print (type(self.json_metadata))
+      #print (self.json_metadata)
       duration = self.json_metadata['Mediainfo']['File']['track'][0]['Duration'][4]
       return duration
