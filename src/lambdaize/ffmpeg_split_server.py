@@ -60,7 +60,7 @@ class FfmpegVideoSplitterQuitState(CommandListState):
 
 class FfmpegVideoSplitterRetrieveAndRunState(CommandListState):
     extra       = "(retrieve video chunk, split into images and upload)"
-    commandlist = [ (None, "set:fromfile:##TMPDIR##/{2}.jpg")
+    commandlist = [ "set:fromfile:##TMPDIR##/{2}.jpg"
                   , "set:cmdoutfile:##TMPDIR##/{2}.jpg"
 		  , "set:targfile:##TMPDIR##/{2}.jpg"
                   , "set:outkey:{1}/{2}.jpg"
