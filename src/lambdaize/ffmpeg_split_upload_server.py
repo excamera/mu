@@ -44,6 +44,7 @@ class ServerInfo(object):
     s3_url_formatter = "http://s3-%s.amazonaws.com/%s/%s/%s"
     chunk_duration   = "%s:%s:%s"
     chunk_duration_s = 1
+    frames_in_chunk  = 24 * chunk_duration_s
 
     cacert = None
     srvcrt = None
@@ -52,22 +53,42 @@ class ServerInfo(object):
 class FinalState(TerminalState):
     extra = "(finished)"
 
-class FfmpegVideoSplitterQuitState(CommandListState):
+class FfmpegVideoSplitterUploadState(CommandListState):
     extra       = "(uploading)"
-    nextState   = FinalState
-    commandlist = [ (None, "quit:")
+    commandlist = [ (None, "set:fromfile:##TMPDIR##/{2}.png")
+		  , ("OK:SET", "set:cmdoutfile:##TMPDIR##/{2}.png")
+		  , ("OK:SET", "set:outkey:{1}/{3}.png")
+                  , ("OK:SET", "upload:")
+		  , None
                   ]
+
+    def __init__(self, prevState, aNum=0):
+      super(FfmpegVideoSplitterUploadState, self).__init__(prevState, aNum)
+      inName  = "%s-%s" % (ServerInfo.video_name, ServerInfo.in_format)
+      outName = "%s-%s" % (inName, "png-split")
+      num     = 1 + prevState.info['retrieve_iter']
+      number  = 1 + ServerInfo.frames_in_chunk * (self.actorNum + ServerInfo.num_offset) + self.info['retrieve_iter']
+      self.commands  = [ s.format(inName, outName, num, number) if s is not None else None for s in self.commands ]
+      #print (self.commands)
+
+class FfmpegVideoSplitterUploadLoopState(ForLoopState):
+    extra     = "(upload loop)"
+    loopState = FfmpegVideoSplitterUploadState
+    exitState = FinalState
+    iterKey   = "retrieve_iter"
+
+    def __init__(self, prevState, aNum=0):
+        super(FfmpegVideoSplitterUploadLoopState, self).__init__(prevState, aNum)
+        # number of frames to retrieve is stored in ServerInfo object
+        self.iterFin  = ServerInfo.frames_in_chunk
+	self.iterInit = 1
+
+FfmpegVideoSplitterUploadState.nextState = FfmpegVideoSplitterUploadLoopState
 
 class FfmpegVideoSplitterRetrieveAndRunState(CommandListState):
     extra       = "(retrieve video chunk, split into images and upload)"
-    commandlist = [ (None, "set:fromfile:##TMPDIR##/{2}.png")
-                  , "set:cmdoutfile:##TMPDIR##/{2}.png"
-		  , "set:targfile:##TMPDIR##/{2}.png"
-                  , "set:outkey:{1}/{2}.png"
-		  , "run:./ffmpeg -version"
-                  , "run:./ffmpeg -i '{8}' -ss {6} -t {7} -vframes 24 -f image2 -c:v png ##TMPDIR##/%08d.png"
+    commandlist = [ (None, "run:./ffmpeg -i '{8}' -ss {6} -t {7} -vframes 24 -f image2 -c:v png ##TMPDIR##/%d.png")
 		  , "run:ls ##TMPDIR##"
-                  , ("OK:RETVAL(0)", "upload:")
                   , None
                   ]
 
@@ -93,14 +114,14 @@ class FfmpegVideoSplitterRetrieveAndRunState(CommandListState):
 
     def sign(self, bucket, key):
       signed_url = signurl.invoke_sign(bucket, key)
+      # to be changed when ffmpeg is compiled with TLS and OpenSSL
       return signed_url.replace("https", "http")
 
     def __init__(self, prevState, aNum=0):
         super(FfmpegVideoSplitterRetrieveAndRunState, self).__init__(prevState, aNum)
         inName         = "%s-%s" % (ServerInfo.video_name, ServerInfo.in_format)
         outName        = "%s-%s" % (inName, "png-split")
-	number         = 1 + self.actorNum * 24
-        #number         = 1 + ServerInfo.num_frames * (self.actorNum + ServerInfo.num_offset) + self.info['retrieve_iter']
+        number         = 1 + ServerInfo.num_frames * (self.actorNum + ServerInfo.num_offset) + self.info['retrieve_iter']
         video_mp4_name = ServerInfo.video_mp4_name
         video_url      = ServerInfo.s3_url_formatter % (ServerInfo.regions[0], ServerInfo.bucket, inName, ServerInfo.video_mp4_name)
         metadata       = self.get_video_metadata(ServerInfo.bucket, ServerInfo.video_mp4_name, number, self.actorNum)
@@ -112,12 +133,12 @@ class FfmpegVideoSplitterRetrieveAndRunState(CommandListState):
 class FfmpegVideoSplitterRetrieveLoopState(ForLoopState):
     extra     = "(retrieve loop)"
     loopState = FfmpegVideoSplitterRetrieveAndRunState
-    exitState = FfmpegVideoSplitterQuitState
+    exitState = FfmpegVideoSplitterUploadLoopState
     iterKey   = "retrieve_iter"
 
     def __init__(self, prevState, aNum=0):
         super(FfmpegVideoSplitterRetrieveLoopState, self).__init__(prevState, aNum)
-        # number of frames to retrieve is stored in ServerInfo object
+	# hard-coded to 1 because our input is just 1
         self.iterFin = 1
 
 # need to set this here to avoid use-before-def
