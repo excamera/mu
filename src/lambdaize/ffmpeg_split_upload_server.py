@@ -15,6 +15,8 @@
 #  FfmpegVideoSplitterConfigState
 #    -> FfmpegVideoSplitterRetrieveLoopState
 #    -> FfmpegVideoSplitterRetrieveAndRunState
+#    -> FfmpegVideoSplitterUploadLoopState
+#    -> FfmpegVideoSplitterUploadLoopState
 #    -> FfmpegVideoSplitterQuitState
 #    -> FinalState
 ###
@@ -25,7 +27,7 @@ import math
 
 import signurl
 from libmu import server, TerminalState, CommandListState, ForLoopState
-from extract_metadata import MetadataExtraction
+import extract_metadata
 
 class ServerInfo(object):
     port_number = 13579
@@ -34,9 +36,9 @@ class ServerInfo(object):
     num_frames       = 1
     num_offset       = 0
     num_parts        = 1
-    lambda_function  = "ffmpeg"
+    lambda_function  = ""
     regions          = ["us-east-1"]
-    bucket           = "excamera-us-east-1"
+    bucket           = "excamera-ffmpeg-input"
     video_mp4_name   = "input.mp4"
     in_format        = "mp4"
     out_file         = None
@@ -44,7 +46,8 @@ class ServerInfo(object):
     s3_url_formatter = "http://s3-%s.amazonaws.com/%s/%s/%s"
     chunk_duration   = "%s:%s:%s"
     chunk_duration_s = 1
-    frames_in_chunk  = 24 * chunk_duration_s
+    frame_rate       = 24
+    lambda_count     = num_parts
 
     cacert = None
     srvcrt = None
@@ -52,6 +55,9 @@ class ServerInfo(object):
 
 class FinalState(TerminalState):
     extra = "(finished)"
+    commandlist = [ (None, "quit:")
+		  , None
+		  ]
 
 class FfmpegVideoSplitterUploadState(CommandListState):
     extra       = "(uploading)"
@@ -67,9 +73,8 @@ class FfmpegVideoSplitterUploadState(CommandListState):
       inName  = "%s-%s" % (ServerInfo.video_name, ServerInfo.in_format)
       outName = "%s-%s" % (inName, "png-split")
       num     = 1 + prevState.info['retrieve_iter']
-      number  = 1 + ServerInfo.frames_in_chunk * (self.actorNum + ServerInfo.num_offset) + self.info['retrieve_iter']
-      self.commands  = [ s.format(inName, outName, num, number) if s is not None else None for s in self.commands ]
-      #print (self.commands)
+      number  = 1 + ServerInfo.frame_rate * ServerInfo.chunk_duration_s * (self.actorNum + ServerInfo.num_offset) + self.info['retrieve_iter']
+      self.commands  = [ s.format(inName, outName, num, "%08d" % number) if s is not None else None for s in self.commands ]
 
 class FfmpegVideoSplitterUploadLoopState(ForLoopState):
     extra     = "(upload loop)"
@@ -80,55 +85,29 @@ class FfmpegVideoSplitterUploadLoopState(ForLoopState):
     def __init__(self, prevState, aNum=0):
         super(FfmpegVideoSplitterUploadLoopState, self).__init__(prevState, aNum)
         # number of frames to retrieve is stored in ServerInfo object
-        self.iterFin  = ServerInfo.frames_in_chunk
+        self.iterFin  = ServerInfo.frame_rate * ServerInfo.chunk_duration_s
 	self.iterInit = 1
 
 FfmpegVideoSplitterUploadState.nextState = FfmpegVideoSplitterUploadLoopState
 
 class FfmpegVideoSplitterRetrieveAndRunState(CommandListState):
     extra       = "(retrieve video chunk, split into images and upload)"
-    commandlist = [ (None, "run:./ffmpeg -i '{8}' -ss {6} -t {7} -vframes 24 -f image2 -c:v png ##TMPDIR##/%d.png")
-		  , "run:ls ##TMPDIR##"
+    commandlist = [ (None, "run:./ffmpeg -i '{3}' -ss {1} -t {2} -r {4} -f image2 -c:v png ##TMPDIR##/%d.png")
+		  , ("OK:RETVAL(0)", "run:ls ##TMPDIR## | wc -l")
                   , None
                   ]
 
-    def get_video_metadata(self, bucket, key, number, actorNum):
-      metadata = MetadataExtraction(bucket, key)
-      metadata.invoke_metadata_extraction()
-      return metadata
-
-    def get_chunk_point_in_duration(self, metadata, number, actorNum):
-      re_exp_for_duration = "(\d{2}):(\d{2}):(\d{2})\.\d+"
-      re_length           = re.compile(re_exp_for_duration)
-      video_duration      = metadata.get_duration()
-      matches             = re_length.search(video_duration)
-      if matches:
-        video_length      = int(matches.group(1)) * 3600 + \
-                            int(matches.group(2)) * 60 + \
-                            int(matches.group(3))
-	split_count       = int(math.ceil(video_length/float(ServerInfo.chunk_duration_s)))
-	split_start       = ServerInfo.chunk_duration_s * actorNum
-        return str(split_start)
-      else:
-	return str(ServerInfo.chunk_duration_s)
-
     def sign(self, bucket, key):
-      signed_url = signurl.invoke_sign(bucket, key)
-      # to be changed when ffmpeg is compiled with TLS and OpenSSL
-      return signed_url.replace("https", "http")
+      return signurl.invoke_sign(bucket, key)
 
     def __init__(self, prevState, aNum=0):
         super(FfmpegVideoSplitterRetrieveAndRunState, self).__init__(prevState, aNum)
         inName         = "%s-%s" % (ServerInfo.video_name, ServerInfo.in_format)
-        outName        = "%s-%s" % (inName, "png-split")
-        number         = 1 + ServerInfo.num_frames * (self.actorNum + ServerInfo.num_offset) + self.info['retrieve_iter']
-        video_mp4_name = ServerInfo.video_mp4_name
-        video_url      = ServerInfo.s3_url_formatter % (ServerInfo.regions[0], ServerInfo.bucket, inName, ServerInfo.video_mp4_name)
-        metadata       = self.get_video_metadata(ServerInfo.bucket, ServerInfo.video_mp4_name, number, self.actorNum)
-        chunk_point    = self.get_chunk_point_in_duration(metadata, number, self.actorNum)
+        chunk_point    = ServerInfo.chunk_duration_s * self.actorNum
         chunk_size     = ServerInfo.chunk_duration_s
 	signed_url     = self.sign(ServerInfo.bucket, ServerInfo.video_mp4_name)
-        self.commands  = [ s.format(inName, outName, "%08d" % number, video_mp4_name, video_url, metadata, chunk_point, chunk_size, signed_url) if s is not None else None for s in self.commands ]
+	frame_rate     = ServerInfo.frame_rate
+        self.commands  = [ s.format(inName, chunk_point, chunk_size, signed_url, frame_rate) if s is not None else None for s in self.commands ]
    
 class FfmpegVideoSplitterRetrieveLoopState(ForLoopState):
     extra     = "(retrieve loop)"
@@ -163,6 +142,20 @@ def run():
 def main():
     # set the server info
     server.options(ServerInfo)
+
+    # extract metadata
+    video_length = extract_metadata.set_chunk_point_in_duration(
+					ServerInfo.bucket,
+					ServerInfo.video_mp4_name,
+					ServerInfo.num_parts)
+    if ServerInfo.num_parts > video_length:
+      ServerInfo.lambda_count = video_length
+      ServerInfo.chunk_duration_s = 1
+      print ("Requested : %s lambda, Needed : %d lambdas only" % (ServerInfo.num_parts, ServerInfo.lambda_count))
+      ServerInfo.num_parts = ServerInfo.lambda_count
+    else:
+      ServerInfo.chunk_duration_s = int(math.ceil(video_length/float(ServerInfo.num_parts)))
+      print ("Forking %d lambdas with %d secs of video/lambda" %(ServerInfo.num_parts, ServerInfo.chunk_duration_s))
 
     # launch the lambdas
     event = { "mode"    : 1

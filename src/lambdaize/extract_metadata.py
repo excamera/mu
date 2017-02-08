@@ -3,6 +3,7 @@ import subprocess
 import boto3
 import xmltodict
 import simplejson as json
+import re
 from optparse import OptionParser
 
 class MetadataExtraction(object):
@@ -66,7 +67,7 @@ class MetadataExtraction(object):
       return presigned_url
 
     def invoke_metadata_extraction(self):
-      print (self.bucket, self.key)
+      #print (self.bucket, self.key)
       event = {
         'bucket' : self.bucket,
         'key' :self. key
@@ -78,3 +79,19 @@ class MetadataExtraction(object):
       #print (self.json_metadata)
       duration = self.json_metadata['Mediainfo']['File']['track'][0]['Duration'][4]
       return duration
+
+def set_chunk_point_in_duration(bucket, key, lambda_count):
+  print ("Extracting metadata from %s bucket and %s key" % (bucket, key))
+  metadata = MetadataExtraction(bucket, key)
+  metadata.invoke_metadata_extraction()
+  
+  re_exp_for_duration = "(\d{2}):(\d{2}):(\d{2})\.\d+"
+  re_length           = re.compile(re_exp_for_duration)
+  video_duration      = metadata.get_duration()
+  matches             = re_length.search(video_duration)
+  video_length        = 60
+  if matches:
+    video_length      = int(matches.group(1)) * 3600 + \
+                        int(matches.group(2)) * 60 + \
+                        int(matches.group(3))
+  return video_length

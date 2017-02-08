@@ -26,14 +26,14 @@ from libmu import server, TerminalState, CommandListState, ForLoopState
 class ServerInfo(object):
     port_number = 13579
 
-    video_name      = "sintel-1k"
+    video_name      = "video"
     num_frames      = 6
     num_offset      = 0
     num_parts       = 1
     lambda_function = "ffmpeg"
     regions         = ["us-east-1"]
     bucket          = "excamera-us-east-1"
-    in_format       = "png16"
+    in_format       = "mp4"
     out_file        = None
     profiling       = None
 
@@ -57,7 +57,7 @@ class GrayScaleRetrieveAndRunState(CommandListState):
                   , "set:cmdinfile:##TMPDIR##/{2}.png"
                   , "set:cmdoutfile:##TMPDIR##/{2}-gs.png"
                   , "set:fromfile:##TMPDIR##/{2}-gs.png"
-                  , "set:outkey:{1}/{2}.png"
+                  , "set:outkey:{1}/{2}-gs.png"
                   , "retrieve:"
                   , "run:./png2y4m -i -d -o ##TMPDIR##/{2}.y4m ##TMPDIR##/{2}.png"
                   , "run:./ffmpeg -i ##TMPDIR##/{2}.y4m -vf hue=s=0 -c:a copy -safe 0 ##TMPDIR##/{2}-gs.y4m"
@@ -68,11 +68,10 @@ class GrayScaleRetrieveAndRunState(CommandListState):
 
     def __init__(self, prevState, aNum=0):
         super(GrayScaleRetrieveAndRunState, self).__init__(prevState, aNum)
-        inName        = "%s-%s" % (ServerInfo.video_name, ServerInfo.in_format)
-        outName       = "%s-%s-%s" % (ServerInfo.video_name, ServerInfo.in_format, "grayscale")
+        inName        = "%s-%s-%s" % (ServerInfo.video_name, ServerInfo.in_format, "png-split")
+        outName       = "%s-%s-%s" % (ServerInfo.video_name, ServerInfo.in_format, "png-split-gs")
         number        = 1 + ServerInfo.num_frames * (self.actorNum + ServerInfo.num_offset) + self.info['retrieve_iter']
         self.commands = [ s.format(inName, outName, "%08d" % number) if s is not None else None for s in self.commands ]
-	print (self.commands)
 
 class GrayScaleRetrieveLoopState(ForLoopState):
     extra     = "(retrieve loop)"
