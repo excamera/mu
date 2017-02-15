@@ -572,3 +572,156 @@ def options(server_info):
     server_info.cacert = libmu.util.read_pem(cacertfile)
     server_info.srvcrt = libmu.util.read_pem(srvcrtfile)
     server_info.srvkey = libmu.util.read_pem(srvkeyfile)
+
+
+###
+# make coordinator callable instead of only run in cmd line
+# convert argv parameters into arguments to be parsed
+###
+def options2(server_info, argv):
+    (uStr, oStr) = usage_str(server_info)
+
+    try:
+        opts, args = getopt.getopt(argv, oStr)
+    except getopt.GetoptError as err:
+        print str(err)
+        print uStr
+        sys.exit(1)
+
+    if len(args) > 0:
+        print "ERROR: Extraneous arguments '%s'" % ' '.join(args)
+        print
+        print uStr
+        sys.exit(1)
+
+    cacertfile = os.environ.get('CA_CERT')
+    srvcrtfile = os.environ.get('SRV_CERT')
+    srvkeyfile = os.environ.get('SRV_KEY')
+
+    for (opt, arg) in opts:
+        if opt == "-o":
+            if hasattr(server_info, 'num_list'):
+                assert server_info.num_list is None, "You cannot specify both -N and -o!!!"
+            server_info.num_offset = int(arg)
+        elif opt == "-f":
+            server_info.num_frames = int(arg)
+        elif opt == "-n":
+            if hasattr(server_info, 'num_list'):
+                assert server_info.num_list is None, "You cannot specify both -N and -n!!!"
+            server_info.num_parts = int(arg)
+        elif opt == "-v":
+            server_info.video_name = arg
+        elif opt == "-l":
+            server_info.lambda_function = arg
+        elif opt == "-r":
+            server_info.regions = arg.split(',')
+        elif opt == "-D":
+            libmu.defs.Defs.debug = True
+        elif opt == "-c":
+            cacertfile = arg
+        elif opt == "-s":
+            srvcrtfile = arg
+        elif opt == "-k":
+            srvkeyfile = arg
+        elif opt == "-b":
+            server_info.bucket = arg
+        elif opt == "-i":
+            server_info.in_format = arg
+        elif opt == "-U":
+            print uStr
+            sys.exit(1)
+        elif opt == "-O":
+            server_info.out_file = arg
+        elif opt == "-P":
+            server_info.profiling = arg
+        elif opt == "-p":
+            try:
+                (p1, p2, p3, p4) = arg.replace(' ', '').split(',')
+                p1 = int(p1)
+                p2 = int(p2)
+                p3 = int(p3)
+                p4 = int(p4)
+                assert p1 >= server_info.min_passes[0] and \
+                       p2 >= server_info.min_passes[1] and \
+                       p3 >= server_info.min_passes[2] and \
+                       p4 >= server_info.min_passes[3]
+                server_info.num_passes = (p1, p2, p3, p4)
+                server_info.tot_passes = sum(server_info.num_passes)
+            except AssertionError:
+                print "ERROR: Invalid number of passes specified."
+                print uStr
+                sys.exit(1)
+            except:
+                print "ERROR: Invalid argument to -p: '%s'" % arg
+                print uStr
+                sys.exit(1)
+        elif opt == "-N" or opt == "-q":
+            to_numlist(arg, server_info.num_list)
+            server_info.num_parts = len(server_info.num_list)
+            assert len(server_info.num_list) > 0
+        elif opt == "-t":
+            server_info.port_number = int(arg)
+        elif opt == "-h":
+            server_info.host_addr = arg
+        elif opt == "-q":
+            to_numlist(arg, server_info.quality_values)
+            server_info.quality_valstring = '_'.join([ str(x) for x in server_info.quality_values ])
+            assert len(server_info.quality_values) > 0
+        elif opt == "-Y":
+            server_info.quality_y = int(arg)
+        elif opt == "-H":
+            server_info.state_srv_addr = arg
+        elif opt == "-T":
+            server_info.state_srv_port = int(arg)
+        elif opt == "-R":
+            server_info.state_srv_threads = int(arg)
+        elif opt == "-x":
+            server_info.run_xcenc = True
+        elif opt == "-u":
+            server_info.upload_states = True
+        elif opt == "-K":
+            server_info.keyframe_distance = int(arg)
+        elif opt == "-X":
+            server_info.overprovision = int(arg)
+        elif opt == "-S":
+            server_info.quality_s = int(arg)
+        else:
+            assert False, "logic error: got unexpected option %s from getopt" % opt
+
+    if hasattr(server_info, 'quality_y') and hasattr(server_info, 'quality_str'):
+        qs = getattr(server_info, 'quality_s', None)
+        qStr = str(qs) if qs is not None else 'x'
+        ks = getattr(server_info, 'keyframe_distance', None)
+        kStr = ('_k%d' % ks) if ks is not None else ''
+        server_info.quality_str = "%d_%s%s" % (server_info.quality_y, qStr, kStr)
+
+    if hasattr(server_info, 'regions') and len(server_info.regions) == 0:
+        print "ERROR: region list cannot be empty"
+        print
+        print uStr
+        sys.exit(1)
+
+    if hasattr(server_info, 'lambda_function') and (os.environ.get("AWS_ACCESS_KEY_ID") is None or os.environ.get("AWS_SECRET_ACCESS_KEY") is None):
+        print "ERROR: You must set the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY envvars"
+        print
+        print uStr
+        sys.exit(1)
+
+    if hasattr(server_info, 'num_passes'):
+        if getattr(server_info, 'keyframe_distance', None):
+            server_info.num_passes = (1, server_info.keyframe_distance, 0, 0)
+        else:
+            assert server_info.num_passes[1] == 0, "In swframe mode, phase two is not supported."
+
+    for f in [cacertfile, srvcrtfile, srvkeyfile]:
+        try:
+            os.stat(str(f))
+        except:
+            print "ERROR: Cannot open SSL cert or key file '%s'" % str(f)
+            print
+            print uStr
+            sys.exit(1)
+
+    server_info.cacert = libmu.util.read_pem(cacertfile)
+    server_info.srvcrt = libmu.util.read_pem(srvcrtfile)
+    server_info.srvkey = libmu.util.read_pem(srvkeyfile)
