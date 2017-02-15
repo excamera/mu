@@ -409,6 +409,10 @@ def usage_str(defaults):
         uStr += "  -r r1,r2,...:  comma-separated list of regions                 ('%s')\n" % ','.join(defaults.regions)
         oStr += "r:"
 
+    if hasattr(defaults, 'hashed_names'):
+        uStr += "  -M             use MD5 hash for input files                    ('%s')\n" % defaults.lambda_function
+        oStr += "M"
+
     uStr += "\n  -c caCert:     CA certificate file                             (None)\n"
     uStr += "  -s srvCert:    server certificate file                         (None)\n"
     uStr += "  -k srvKey:     server key file                                 (None)\n"
@@ -532,6 +536,8 @@ def options(server_info):
             server_info.overprovision = int(arg)
         elif opt == "-S":
             server_info.quality_s = int(arg)
+        elif opt == "-M":
+            server_info.hashed_names = True
         else:
             assert False, "logic error: got unexpected option %s from getopt" % opt
 
