@@ -1,6 +1,9 @@
 #!/usr/bin/python
 
 import os
+import hashlib
+
+md5 = lambda x: hashlib.md5(x).hexdigest()
 
 from libmu import util, server, TerminalState, CommandListState, ForLoopState, OnePassState, ErrorState
 
@@ -43,6 +46,8 @@ class ServerInfo(object):
 
     xcenc_invocation = "##INSTATEWAIT## ./xc-enc ##QUALITY## -w 0.75 -i y4m -O \"##TMPDIR##/final.state\" -o \"##TMPDIR##/output.ivf\" ##INSTATESWITCH## \"##TMPDIR##/input.y4m\" 2>&1"
     vpxenc_invocation = "./vpxenc --ivf -q --codec=vp8 --good --cpu-used=0 --end-usage=cq --min-q=0 --max-q=63 --cq-level=##QUALITY## --buf-initial-sz=10000 --buf-optimal-sz=20000 --buf-sz=40000 --undershoot-pct=100 --passes=2 --auto-alt-ref=1 --threads=1 --token-parts=0 --tune=ssim --target-bitrate=4294967295 -o \"##TMPDIR##/output.ivf\" \"##TMPDIR##/input.y4m\""
+
+    hashed_names = False
     ### commands look like this:
     # PHASE 1 # vpxenc and then xc-dump
     # PHASE 2 # xc-enc             -i y4m -O final.state -o output.ivf -r -I 0.state           -p prev.ivf                      input.y4m 2>&1
@@ -224,7 +229,7 @@ class XCEncSettingsState(CommandListState):
     nextState = XCEncLoopState
     pipelined = True
     commandlist = [ ("OK:HELLO", "connect:{4}:HELLO_STATE:{2}:{1}:{3}")
-                  , "retrieve:{0}/{1}.y4m\0##TMPDIR##/input.y4m"
+                  , "retrieve:{0}/{1}\0##TMPDIR##/input.y4m"
                   , ("OK:RETRIEVE(", None)
                   ]
 
@@ -232,7 +237,7 @@ class XCEncSettingsState(CommandListState):
         super(XCEncSettingsState, self).__init__(prevState, aNum)
         pNum = self.actorNum + ServerInfo.num_offset
         nNum = pNum + 1
-        pStr = "%08d" % pNum
+        pStr = "%08d.y4m" % pNum
         vName = ServerInfo.video_name
         if ServerInfo.client_uniq is None:
             ServerInfo.client_uniq = util.rand_str(16)
@@ -243,7 +248,7 @@ class XCEncSettingsState(CommandListState):
 
         port_number = ServerInfo.state_srv_port + (gNum % ServerInfo.state_srv_threads)
         stateAddr = "%s:%d" % (ServerInfo.state_srv_addr, port_number)
-        self.commands = [ s.format(vName, pStr, rStr, nNum, stateAddr) if s is not None else None for s in self.commands ]
+        self.commands = [ s.format(vName, md5(pStr) if ServerInfo.hashed_names else pStr, rStr, nNum, stateAddr) if s is not None else None for s in self.commands ]
 
 def run():
     server.server_main_loop(ServerInfo.states, XCEncSettingsState, ServerInfo)
