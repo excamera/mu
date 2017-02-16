@@ -165,12 +165,14 @@ def run():
                     state_fd_map[fd].do_read()
 
         # handle messages from each connection
+        to_delete = []
         for idx in state_id_map:
             state = state_id_map[idx]
             if state.partner is None and state.want_handle:
                 newid = state.initialize()
                 rwflags[newid] = rwflags[idx]
-                del state_id_map[idx]
+                #del state_id_map[idx]
+                if idx != newid: to_delete.append(idx)
                 del rwflags[idx]
                 if newid is not None:
                     state_id_map[newid] = state
@@ -186,6 +188,9 @@ def run():
                     print "SERVER message from %s to %s" % (state.stateid, state.partner)
                 while state.want_handle:
                     state_id_map[state.partner].enqueue(state.dequeue())
+
+        for idx in to_delete:
+            del state_id_map[idx]
 
         # handle tombstone messages
         to_delete = []
