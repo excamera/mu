@@ -229,7 +229,7 @@ class XCEncSettingsState(CommandListState):
     nextState = XCEncLoopState
     pipelined = True
     commandlist = [ ("OK:HELLO", "connect:{4}:HELLO_STATE:{2}:{1}:{3}")
-                  , "retrieve:{0}/{1}\0##TMPDIR##/input.y4m"
+                  , "retrieve:{0}/{5}\0##TMPDIR##/input.y4m"
                   , ("OK:RETRIEVE(", None)
                   ]
 
@@ -237,7 +237,7 @@ class XCEncSettingsState(CommandListState):
         super(XCEncSettingsState, self).__init__(prevState, aNum)
         pNum = self.actorNum + ServerInfo.num_offset
         nNum = pNum + 1
-        pStr = "%08d.y4m" % pNum
+        pStr = "%08d" % pNum
         vName = ServerInfo.video_name
         if ServerInfo.client_uniq is None:
             ServerInfo.client_uniq = util.rand_str(16)
@@ -248,7 +248,7 @@ class XCEncSettingsState(CommandListState):
 
         port_number = ServerInfo.state_srv_port + (gNum % ServerInfo.state_srv_threads)
         stateAddr = "%s:%d" % (ServerInfo.state_srv_addr, port_number)
-        self.commands = [ s.format(vName, md5(pStr) if ServerInfo.hashed_names else pStr, rStr, nNum, stateAddr) if s is not None else None for s in self.commands ]
+        self.commands = [ s.format(vName, pStr, rStr, nNum, stateAddr, md5("%s.y4m" % pStr) if ServerInfo.hashed_names else ("%s.y4m" % pStr)) if s is not None else None for s in self.commands ]
 
 def run():
     server.server_main_loop(ServerInfo.states, XCEncSettingsState, ServerInfo)
