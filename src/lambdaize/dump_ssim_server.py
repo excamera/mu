@@ -1,6 +1,9 @@
 #!/usr/bin/python
 
 import os
+import hashlib
+
+md5 = lambda x: hashlib.md5(x).hexdigest()
 
 from libmu import server, TerminalState, CommandListState
 
@@ -23,6 +26,8 @@ class ServerInfo(object):
     bucket = "excamera-us-east-1"
     out_file = None
     profiling = None
+
+    hashed_names = False
 
     cacert = None
     srvcrt = None
@@ -63,7 +68,7 @@ class DumpSSIMRetrieveState(CommandListState):
     # keep this state separate from the next one so that we can parallelize downloading with pipelined commands
     pipelined = True
     nextState = DumpSSIMState
-    commandlist = [ ("OK:HELLO", "retrieve:{0}/{1}.y4m\0##TMPDIR##/orig.y4m")
+    commandlist = [ ("OK:HELLO", "retrieve:{0}/{4}\0##TMPDIR##/orig.y4m")
                   , "retrieve:{0}/first_{3}/{1}.ivf\0##TMPDIR##/vpx.ivf"
                   , "retrieve:{0}/out_{3}/{1}.ivf\0##TMPDIR##/xc.ivf"
                   , "retrieve:{0}/final_state_{3}/{2}.state\0##TMPDIR##/final.state"
@@ -80,7 +85,7 @@ class DumpSSIMRetrieveState(CommandListState):
         pStr = "%08d" % pNum
         prStr = "%08d" % (pNum - 1)
         qStr = ServerInfo.quality_str
-        self.commands = [ s.format(vName, pStr, prStr, qStr) if s is not None else None for s in self.commands ]
+        self.commands = [ s.format(vName, pStr, prStr, qStr, md5("%s.y4m" % pStr) if ServerInfo.hashed_names else ("%s.y4m" % pStr)) if s is not None else None for s in self.commands ]
 
 def run():
     server.server_main_loop([], DumpSSIMRetrieveState, ServerInfo)
