@@ -173,7 +173,7 @@ def make_urstring(msg, vals, keyk, filek):
     if success:
         filename = filename.replace("##TMPDIR##", vals['_tmpdir'])
 
-    if hash_s3keys:
+    if vals.get('hash_s3keys'):
         hashval = md5.md5(key.split('/')[-1]).hexdigest()[0:4]
         key = "%s-key" % hashval
 
@@ -224,6 +224,7 @@ def lambda_handler(event, _):
            , 'bg_silent': bg_silent
            , 'minimal_recode': minimal_recode
            , 'run_iter': 0
+           , 'hash_s3keys': hash_s3keys
            , '_tmpdir': tempfile.mkdtemp(prefix="lambda_", dir="/tmp")
            }
 
