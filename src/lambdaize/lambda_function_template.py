@@ -175,7 +175,7 @@ def make_urstring(msg, vals, keyk, filek):
 
     if vals.get('hash_s3keys'):
         hashval = md5.md5(key.split('/')[-1]).hexdigest()[0:4]
-        key = "%s-key" % hashval
+        key = "%s-%s" % (hashval, key)
 
     return (success, bucket, key, filename)
 
