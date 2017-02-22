@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import md5
 import os
 import select
 import shutil
@@ -172,6 +173,10 @@ def make_urstring(msg, vals, keyk, filek):
     if success:
         filename = filename.replace("##TMPDIR##", vals['_tmpdir'])
 
+    if hash_s3keys:
+        hashval = md5.md5(key.split('/')[-1]).hexdigest()[0:4]
+        key = "%s-key" % hashval
+
     return (success, bucket, key, filename)
 
 make_uploadstring = lambda m, v: make_urstring(m, v, 'outkey', 'fromfile')
@@ -201,6 +206,7 @@ def lambda_handler(event, _):
     rm_tmpdir = int(event.get('rm_tmpdir', 1))
     bg_silent = int(event.get('bg_silent', 0))
     minimal_recode = int(event.get('minimal_recode', 0))
+    hash_s3keys = int(event.get('hash_s3keys', 0))
 
     if rm_tmpdir:
         os.system("rm -rf /tmp/*")
