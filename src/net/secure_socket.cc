@@ -57,7 +57,7 @@ SSL_CTX * initialize_new_context()
 {
     OpenSSL::global_context();
 
-    SSL_CTX * ret = SSL_CTX_new(TLSv1_2_client_method());
+    SSL_CTX * ret = SSL_CTX_new(TLS_client_method());
     if ( not ret ) {
         throw ssl_error( "SSL_CTL_new" );
     }
