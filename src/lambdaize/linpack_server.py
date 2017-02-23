@@ -1,8 +1,11 @@
 #!/usr/bin/python
 
 import os
+import pprint
 
 from libmu import server, TerminalState, CommandListState
+
+pp = pprint.PrettyPrinter(indent=2)
 
 class ServerInfo(object):
     port_number = 13579
@@ -21,6 +24,14 @@ class ServerInfo(object):
 
 class FinalState(TerminalState):
     extra = "(finished)"
+
+    def __init__(self, prevState, actorNum=0):
+        super(FinalState, self).__init__(prevState, actorNum)
+
+        aNum = self.actorNum
+        if ServerInfo.out_file is not None:
+            with open("%s.%d.msgs" % (ServerInfo.out_file, aNum), 'w') as mout:
+                mout.write(pp.pformat(self.prevState.messages))
 
 class LinpackRunState(CommandListState):
     extra       = "(running linpack x2)"
