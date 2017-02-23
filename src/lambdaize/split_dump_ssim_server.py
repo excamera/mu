@@ -23,6 +23,8 @@ class ServerInfo(object):
     out_file = None
     profiling = None
 
+    hashed_names = False
+
     cacert = None
     srvcrt = None
     srvkey = None
@@ -56,7 +58,7 @@ class DumpSSIMState(CommandListState):
             stStr = ""
         else:
             stStr = "\"##TMPDIR##/final.state\""
-        
+
         split_num = self.actorNum % 2
         split_inv = 1 - split_num
 
@@ -104,6 +106,7 @@ def main():
             , "srvcrt": ServerInfo.srvcrt
             , "srvkey": ServerInfo.srvkey
             , "bucket": ServerInfo.bucket
+            , "hash_s3keys": 1 if ServerInfo.hashed_names else 0
             }
     server.server_launch(ServerInfo, event, os.environ['AWS_ACCESS_KEY_ID'], os.environ['AWS_SECRET_ACCESS_KEY'])
 
