@@ -8,11 +8,14 @@ from libmu import server, TerminalState, CommandListState
 pp = pprint.PrettyPrinter(indent=2)
 
 class ServerInfo(object):
+    states = []
+    host_addr = None
     port_number = 13579
 
     regions         = ["us-east-1"]
 
     num_parts = 16
+    overprovision = 0
     lambda_function = "linpack_bench_d"
 
     cacert = None
@@ -37,7 +40,8 @@ class LinpackRunState(CommandListState):
     extra       = "(running linpack x2)"
     nextState   = FinalState
     commandlist = [ ("OK:HELLO", "run:time ./linpack_bench_d")
-                  , ("OK", "run:time ./linpack_bench_d")
+                  , (None, "run:time ./linpack_bench_d")
+                  , ("OK", None)
                   , ("OK", None)
                   , ("OK", None)
                   , ("OK", None)
