@@ -1,13 +1,13 @@
 #!/usr/bin/python
 
-import boto3
+import getopt
 import md5
+import multiprocessing as mp
 import sys
 
-import getopt
-import multiprocessing as mp
+import boto3
 
-class ConfigInfo:
+class ConfigInfo(object):
     video_name = "sintel"
     num_offset = 0
     num_parts = 1
@@ -92,7 +92,7 @@ s3_client = boto3.client('s3', region_name=ConfigInfo.region)
 
 def do_download((key, filename)):
     print "Downloading {}...".format(key)
-    s3_client.download_file(ConfigInfo.bucket, key, filename) 
+    s3_client.download_file(ConfigInfo.bucket, key, filename)
 
 def run():
     download_thread_pool = mp.Pool(processes=ConfigInfo.download_threads)
