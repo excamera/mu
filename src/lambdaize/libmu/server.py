@@ -552,6 +552,8 @@ def options(server_info):
             server_info.quality_s = int(arg)
         elif opt == "-M":
             server_info.hashed_names = True
+        elif opt == "-m":
+            server_info.kill_time = int(arg)
         else:
             assert False, "logic error: got unexpected option %s from getopt" % opt
 
