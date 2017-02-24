@@ -5,6 +5,7 @@ import md5
 import sys
 
 import getopt
+import multiprocessing as mp
 
 class ConfigInfo:
     video_name = "sintel"
@@ -22,6 +23,8 @@ class ConfigInfo:
 
     hashed_names = False
 
+    download_threads = 8
+
 def show_usage():
     print "Usage: get_ssim_results.py [options]"
     print
@@ -33,11 +36,12 @@ def show_usage():
     print " -o num_chunks_offset"
     print " -r region_name          (will autocompute bucketname if you leave out -b)"
     print " -b bucket_name"
+    print " -N download_threads"
     print " -M                      (enable hashed names)"
     print
 
 def get_options():
-    oStr = "Y:K:v:f:o:n:b:r:M"
+    oStr = "Y:K:v:f:o:n:b:r:N:M"
 
     try:
         (opts, args) = getopt.getopt(sys.argv[1:], oStr)
@@ -70,6 +74,8 @@ def get_options():
             ConfigInfo.keyframe_distance = int(arg)
         elif opt == "-Y":
             ConfigInfo.quality_y = int(arg)
+        elif opt == "-N":
+            ConfigInfo.download_threads = int(arg)
         elif opt == "-M":
             ConfigInfo.hashed_names = True
         else:
@@ -81,16 +87,25 @@ def get_options():
     if ConfigInfo.bucket is None:
         ConfigInfo.bucket = "excamera-%s" % ConfigInfo.region
 
+
+s3_client = boto3.client('s3', region_name=ConfigInfo.region)
+
+def do_download((key, filename)):
+    print "Downloading {}...".format(key)
+    s3_client.download_file(ConfigInfo.bucket, key, filename) 
+
 def run():
-    s3_client = boto3.client('s3', region_name=ConfigInfo.region)
+    download_thread_pool = mp.Pool(processes=ConfigInfo.download_threads)
 
     basekey = "%s-4k-y4m_%02d/out_ssim_%s/" % (ConfigInfo.video_name, ConfigInfo.num_frames, ConfigInfo.quality_str)
+    targets = []
     for vNum in range(ConfigInfo.num_offset, ConfigInfo.num_offset + ConfigInfo.num_parts):
         filename = "%08d.txt" % vNum
         prehash = md5.md5(filename).hexdigest()[0:4]
         key = "%s-%s%s" % (prehash, basekey, filename)
-        print key
-        s3_client.download_file(ConfigInfo.bucket, key, filename)
+        targets += [(key, filename)]
+
+    download_thread_pool.map(do_download, targets)
 
 if __name__ == "__main__":
     get_options()
