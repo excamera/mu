@@ -57,7 +57,7 @@ def main():
     # launch the lambdas
     event = { "mode": 1
             , "port": ServerInfo.port_number
-            , "addr": None  # server_launch will fill this in for us
+            , "addr": ServerInfo.host_addr
             , "nonblock": 1
             , "cacert": ServerInfo.cacert
             , "srvcrt": ServerInfo.srvcrt
