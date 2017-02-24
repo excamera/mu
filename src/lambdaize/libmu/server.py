@@ -231,6 +231,11 @@ def server_main_loop(states, constructor, server_info):
             poll_obj.unregister(lsock_fd)
             lsock_fd = None
 
+        now = time.time()
+        if server_info.kill_time is not None:
+            for killId in reversed([ stId for stId in range(0, len(states)) if not isinstance(states[stId], libmu.machine_state.TerminalState) and now - states[stId].timestamps[0] > server_info.kill_time ]):
+                states[killId] = server_info.kill_state(states[killId])
+
         if npasses_out == 100:
             npasses_out = 0
             show_status()
@@ -266,11 +271,6 @@ def server_main_loop(states, constructor, server_info):
                 rnext = rnext.do_handle()
             stateIdx = state_actNum_map[rnext.actorNum]
             states[stateIdx] = rnext
-
-        now = time.time()
-        if server_info.kill_time is not None:
-            for killId in reversed([ stId for stId in range(0, len(states)) if now - states[stId].timestamps[0] > server_info.kill_time ]):
-                states[killId] = server_info.kill_state(states[killId])
 
     fo = None
     error = []
