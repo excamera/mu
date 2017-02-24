@@ -162,6 +162,11 @@ def server_main_loop(states, constructor, server_info):
     npasses_out = 0
     start_time = time.time()
 
+    if server_info.kill_state is None and server_info.kill_time is not None:
+        class TerminatedState(libmu.machine_state.TerminalState):
+            extra = "(TERMINATED)"
+        server_info.kill_state = TerminatedState
+
     try:
         (screen_height, screen_width, _, _) = struct.unpack("HHHH", fcntl.ioctl(0, termios.TIOCGWINSZ, struct.pack("HHHH", 0, 0, 0, 0)))
     except:
@@ -261,6 +266,11 @@ def server_main_loop(states, constructor, server_info):
                 rnext = rnext.do_handle()
             stateIdx = state_actNum_map[rnext.actorNum]
             states[stateIdx] = rnext
+
+        now = time.time()
+        if server_info.kill_time is not None:
+            for killId in reversed([ stId for stId in range(0, len(states)) if now - states[stId].timestamps[0] > server_info.kill_time ]):
+                states[killId] = server_info.kill_state(states[killId])
 
     fo = None
     error = []
@@ -408,6 +418,10 @@ def usage_str(defaults):
     if hasattr(defaults, 'regions'):
         uStr += "  -r r1,r2,...:  comma-separated list of regions                 ('%s')\n" % ','.join(defaults.regions)
         oStr += "r:"
+
+    if hasattr(defaults, 'kill_time'):
+        uStr += "  -m timeout:    timeout in seconds before killing worker        (%s)\n" % str(defaults.kill_time)
+        oStr += "m:"
 
     if hasattr(defaults, 'hashed_names'):
         uStr += "  -M             use MD5 hash for input files                    ('%s')\n" % defaults.lambda_function

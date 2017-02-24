@@ -25,6 +25,9 @@ class ServerInfo(object):
     profiling = None
     out_file = None
 
+    kill_time = None
+    kill_state = None
+
 class FinalState(TerminalState):
     extra = "(finished)"
 
