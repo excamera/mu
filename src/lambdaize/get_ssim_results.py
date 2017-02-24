@@ -75,11 +75,11 @@ def get_options():
         else:
             assert False, "logic error: got unexpected option %s from getopt" % opt
 
-        # construct quality_str
-        ConfigInfo.quality_str = "%d_x_k%d" % (ConfigInfo.quality_y, ConfigInfo.keyframe_distance)
+    # construct quality_str
+    ConfigInfo.quality_str = "%d_x_k%d" % (ConfigInfo.quality_y, ConfigInfo.keyframe_distance)
 
-        if ConfigInfo.bucket is None:
-            ConfigInfo.bucket = "excamera-%s" % arg
+    if ConfigInfo.bucket is None:
+        ConfigInfo.bucket = "excamera-%s" % ConfigInfo.region
 
 def run():
     s3_client = boto3.client('s3', region_name=ConfigInfo.region)
@@ -89,6 +89,7 @@ def run():
         filename = "%08d.txt" % vNum
         prehash = md5.md5(filename).hexdigest()[0:4]
         key = "%s-%s%s" % (prehash, basekey, filename)
+        print key
         s3_client.download_file(ConfigInfo.bucket, key, filename)
 
 if __name__ == "__main__":
