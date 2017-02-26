@@ -134,7 +134,11 @@ class XCEncRunState(CommandListState):
 
         pass_num = self.info['iter_key']
         if pass_num == 0:
-            self.nextState = XCEncDumpState
+            if ServerInfo.keyframe_distance == 1 and not ServerInfo.upload_states:
+                self.nextState = XCEncFinishState
+            else:
+                self.nextState = XCEncDumpState
+
             cmdstring = ServerInfo.vpxenc_invocation
         else:
             cmdstring = ServerInfo.xcenc_invocation
