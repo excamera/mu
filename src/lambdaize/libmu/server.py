@@ -163,7 +163,7 @@ def server_main_loop(states, constructor, server_info):
     start_time = time.time()
 
     if getattr(server_info, 'kill_state', None) is None and getattr(server_info, 'kill_time', None) is not None:
-        class TerminatedState(libmu.machine_state.TerminalState):
+        class TerminatedState(libmu.machine_state.ErrorState):
             extra = "(TERMINATED)"
         server_info.kill_state = TerminatedState
 
@@ -234,7 +234,7 @@ def server_main_loop(states, constructor, server_info):
         now = time.time()
         if getattr(server_info, 'kill_time', None) is not None:
             for killId in reversed([ stId for stId in range(0, len(states)) if not isinstance(states[stId], libmu.machine_state.TerminalState) and now - states[stId].timestamps[0] > server_info.kill_time ]):
-                states[killId] = server_info.kill_state(states[killId])
+                states[killId] = server_info.kill_state(states[killId], "terminated after %d seconds" % server_info.kill_time)
 
         if npasses_out == 100:
             npasses_out = 0
