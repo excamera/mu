@@ -46,7 +46,7 @@ class ServerInfo(object):
     s3_url_formatter = "http://s3-%s.amazonaws.com/%s/%s/%s"
     chunk_duration   = "%s:%s:%s"
     chunk_duration_s = 1
-    frame_rate       = 24
+    frame_rate       = num_frames
     lambda_count     = num_parts
 
     cacert = None
@@ -156,6 +156,8 @@ def main():
     else:
       ServerInfo.chunk_duration_s = int(math.ceil(video_length/float(ServerInfo.num_parts)))
       print ("Forking %d lambdas with %d secs of video/lambda" %(ServerInfo.num_parts, ServerInfo.chunk_duration_s))
+
+    ServerInfo.frame_rate = ServerInfo.num_frames
 
     # launch the lambdas
     event = { "mode"    : 1
