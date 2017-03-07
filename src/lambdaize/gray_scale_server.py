@@ -58,9 +58,7 @@ class GrayScaleRetrieveAndRunState(CommandListState):
                   , "set:fromfile:##TMPDIR##/{2}-gs.png"
                   , "set:outkey:{1}/{2}-gs.png"
                   , "retrieve:"
-                  , ("OK:RETVAL(0)", "run:./png2y4m -i -d -o ##TMPDIR##/{2}.y4m ##TMPDIR##/{2}.png")
-                  , "run:./ffmpeg -i ##TMPDIR##/{2}.y4m -vf hue=s=0 -c:a copy -safe 0 ##TMPDIR##/{2}-gs.y4m"
-                  , "run:./y4m2png -o ##TMPDIR##/{2}-gs.png ##TMPDIR##/{2}-gs.y4m"
+                  , "run:./ffmpeg -i ##TMPDIR##/{2}.png -f image2 -vf hue=s=0 -c:a copy -safe 0 ##TMPDIR##/{2}-gs.png"
                   , ("OK:RETVAL(0)", "upload:")
                   , None
                   ]
