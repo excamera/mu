@@ -13,7 +13,7 @@
 # State Machine Transitions :
 #  MergeMp4ConfigState
 #    -> MergeMp4RetrieveLoopState
-#    -> MergeMp4RetrieveAndRunState
+#    -> MergeMp4RetrieveRunAndUploadState
 #    -> MergeMp4QuitState
 #    -> FinalState
 ###
@@ -23,16 +23,16 @@ import os
 from libmu import server, TerminalState, CommandListState, ForLoopState
 
 class ServerInfo(object):
-    port_number = 13579
+    port_number = 14579
 
     video_name      	= "output"
-    num_frames      	= 2
+    num_frames      	= 1
     num_offset      	= 0
     num_parts       	= 1
     lambda_function 	= "ffmpeg"
     regions         	= ["us-east-1"]
-    bucket          	= "excamera-us-east-1"
-    in_format       	= "mp4"
+    bucket          	= "lixiang-lambda-test"
+    in_format       	= "output"
     out_file        	= None
     profiling       	= None
 
@@ -49,22 +49,28 @@ class MergeMp4QuitState(CommandListState):
     commandlist = [ (None, "quit:")
                   ]
 
-class MergeMp4RetrieveAndRunState(CommandListState):
+class MergeMp4RetrieveRunAndUploadState(CommandListState):
     extra       = "(retrieving mp4, MP4Box and upload m4s)"
+    # set the variables for downloading the first mp4
     commandlist = [ (None, "set:inkey:{0}/{2}.mp4")
                   , "set:targfile:##TMPDIR##/{2}.mp4"
                   , "set:cmdinfile:##TMPDIR##/{2}.mp4"
 		  , "retrieve:"
+    # set the variables for downloading the second mp4
 		  , ("OK:RETVAL(0)", "set:inkey:{0}/{3}.mp4")
 		  , "set:targfile:##TMPDIR##/{3}.mp4"
 		  , "set:cmdinfile:##TMPDIR##/{3}.mp4"
 		  , "retrieve:"
+    # concatenate the two mp4 files
 		  , ("OK:RETVAL(0)", "./ffmpeg -i 'concat:##TMPDIR##/{2}.mp4|##TMPDIR##/{3}.mp4' -codec copy ##TMPDIR##/{4}.mp4")
+    # run MP4Box to create segments
 		  , ("OK:RETVAL(0)", "./MP4Box -dash 1000 -rap -segment-name ##TMPDIR##/seg_{2}_{3}_ ##TMPDIR##/{4}.mp4")
+    # upload the first segment
                   , "set:cmdoutfile:##TMPDIR##/seg_{2}_{3}_1.m4s"
                   , "set:fromfile:##TMPDIR##/seg_{2}_{3}_1.m4s"
                   , "set:outkey:{1}/seg_{5}_1.m4s"
                   , ("OK:RETVAL(0)", "upload:")
+    # upload the second segment
 		  , ("OK:UPLOAD(0)", "set:cmdoutfile:##TMPDIR##/seg_{2}_{3}_2.m4s")
                   , "set:fromfile:##TMPDIR##/seg_{2}_{3}_2.m4s"
                   , "set:outkey:{1}/seg_{5}_2.m4s"
@@ -74,8 +80,16 @@ class MergeMp4RetrieveAndRunState(CommandListState):
 
     def __init__(self, prevState, aNum=0):
         super(MergeMp4RetrieveAndRunState, self).__init__(prevState, aNum)
-        inName          = "%s-%s-%s" % (ServerInfo.video_name, ServerInfo.in_format)
-        outName         = "%s-%s-%s" % (ServerInfo.video_name, ServerInfo.in_format, "m4s")
+	###
+	#  inName	: input folder name 
+	#  outName	: output folder name
+	#  first_mp4	: the first mp4 file
+	#  second_mp4	: the second mp4 file
+	#  merged_mp4	: the merged mp4 file
+	#  output_m4s	: the prefix for the m4s segments
+	###
+        inName          = "%s" % (ServerInfo.in_format)
+        outName         = "%s-%s" % (ServerInfo.in_format, "m4s")
         first_mp4       = "%08d" % (self.actorNum)
         second_mp4      = "%08d" % (self.actorNum + 1)
 	merged_mp4	= "%s_%s" % (first_mp4, second_mp4)
@@ -84,7 +98,7 @@ class MergeMp4RetrieveAndRunState(CommandListState):
 
 class MergeMp4RetrieveLoopState(ForLoopState):
     extra     = "(retrieve loop)"
-    loopState = MergeMp4RetrieveAndRunState
+    loopState = MergeMp4RetrieveRunAndUploadState
     exitState = MergeMp4QuitState
     iterKey   = "mp4_iter"
 
@@ -94,7 +108,7 @@ class MergeMp4RetrieveLoopState(ForLoopState):
         self.iterFin = ServerInfo.num_frames
 
 # need to set this here to avoid use-before-def
-MergeMp4RetrieveAndRunState.nextState = MergeMp4RetrieveLoopState
+MergeMp4RetrieveRunAndUploadState.nextState = MergeMp4RetrieveLoopState
 
 class MergeMp4ConfigState(CommandListState):
     extra       = "(configuring lambda worker)"

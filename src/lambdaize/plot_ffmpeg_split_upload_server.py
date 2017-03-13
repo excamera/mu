@@ -14,7 +14,7 @@ with open(inputf, "r") as fd:
 
 print ("Writtng..............\n")
 fd = open(outputf, "w")
-fd.write("#lambda_id	start	config	split	upload	finish\n")
+fd.write("#lambda_id start config split upload finish\n")
 
 for line in lines:
 	m = re.match(re_pattern, line)
@@ -34,5 +34,7 @@ for line in lines:
 		finish = time_8 - time_7
 		output_string = lambda_id + "\t" + str(launch) + "\t" + str(config) + "\t" + str(run) + "\t" + str(upload) + "\t" + str(finish) + "\n"
 		fd.write(output_string)
+	else:
+		print (line)
 fd.flush()
 fd.close()

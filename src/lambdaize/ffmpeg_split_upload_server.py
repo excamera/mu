@@ -92,7 +92,7 @@ FfmpegVideoSplitterUploadState.nextState = FfmpegVideoSplitterUploadLoopState
 
 class FfmpegVideoSplitterRetrieveAndRunState(CommandListState):
     extra       = "(retrieve video chunk, split into images and upload)"
-    commandlist = [ (None, "run:./ffmpeg -i '{3}' -ss {1} -t {2} -r {4} -f image2 -c:v png ##TMPDIR##/%d.png")
+    commandlist = [ (None, "run:./ffmpeg -ss {1} -t {2} -r {4} -i '{3}' -f image2 -c:v png ##TMPDIR##/%d.png")
 		  , ("OK:RETVAL(0)", "run:ls ##TMPDIR## | wc -l")
                   , None
                   ]
