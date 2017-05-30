@@ -12,6 +12,7 @@ import struct
 import sys
 import termios
 import time
+import logging
 
 import pylaunch
 import libmu.defs
@@ -49,6 +50,7 @@ def _handle_server_sock(ls, states, state_fd_map, state_actNum_map, server_info,
             ls.shutdown()
             ls.close()
         except:
+            logging.warning("failure shutting down the lsock")
             pass
 
         ls = None
@@ -103,19 +105,20 @@ def server_launch(server_info, event, akid, secret):
         event['addr'] = testsock.getsockname()[0]
         testsock.close()
 
-    pid = os.fork()
-    if pid == 0:
+    #pid = os.fork()
+    #if pid == 0:
+    if True:
         # pylint: disable=no-member
         # (pylint can't "see" into C modules)
         total_parts = server_info.num_parts + getattr(server_info, 'overprovision', 0)
         pylaunch.launchpar(total_parts, server_info.lambda_function, akid, secret, json.dumps(event), server_info.regions)
-        sys.exit(0)
+        #sys.exit(0)
 
 ###
 #  set up server listen sock
 ###
 def setup_server_listen(server_info):
-    return libmu.util.listen_socket('0.0.0.0', server_info.port_number, server_info.cacert, server_info.srvcrt, server_info.srvkey, server_info.num_parts + 10)
+    return libmu.util.listen_socket('0.0.0.0', server_info.port_number, server_info.cacert, server_info.srvcrt, server_info.srvkey, 5000)
 
 ###
 #  server mainloop
@@ -206,6 +209,7 @@ def server_main_loop(states, constructor, server_info):
             outstr += '\n'
         sys.stdout.write(outstr + "SERVER status (%s): active=%d, done=%d, prelaunch=%d, error=%d" % (runTime, actStates, doneStates, waitStates, errStates))
         sys.stdout.flush()
+        server_info.ready_event.set()
 
     while True:
         dflags = rwsplit(states, rwflags)
@@ -241,9 +245,11 @@ def server_main_loop(states, constructor, server_info):
         for (fd, ev) in pfds:
             if (ev & select.POLLIN) != 0:
                 if lsock is not None and fd == lsock_fd:
+                    logging.debug("listening sock got data in")
                     lsock = _handle_server_sock(lsock, states, state_fd_map, state_actNum_map, server_info, constructor)
 
                 else:
+                    logging.debug("conn sock got data in")
                     stateIdx = state_fd_map[fd]
                     r = states[stateIdx]
                     rnext = r.do_read()
@@ -594,7 +600,7 @@ def options2(server_info, argv):
         print uStr
         sys.exit(1)
 
-    cacertfile = os.environ.get('CA_CERT')
+    # cacertfile = os.environ.get('CA_CERT')
     srvcrtfile = os.environ.get('SRV_CERT')
     srvkeyfile = os.environ.get('SRV_KEY')
 
@@ -722,6 +728,6 @@ def options2(server_info, argv):
             print uStr
             sys.exit(1)
 
-    server_info.cacert = libmu.util.read_pem(cacertfile)
+    # server_info.cacert = libmu.util.read_pem(cacertfile)
     server_info.srvcrt = libmu.util.read_pem(srvcrtfile)
     server_info.srvkey = libmu.util.read_pem(srvkeyfile)

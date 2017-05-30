@@ -3,13 +3,14 @@
 import random
 import socket
 import traceback
+import logging
 
 from OpenSSL import SSL, crypto
 from OpenSSL._util import lib as _ssl_lib
 
 import libmu.socket_nb
 import libmu.defs
-
+import pdb
 # format the base64 portion of an SSL cert into something libssl can use
 def format_pem(ctype, cert):
     fmt_cert = "-----BEGIN %s-----\n" % ctype
@@ -109,14 +110,14 @@ def listen_socket(addr, port, cacert, srvcrt, srvkey, nlisten=1):
     ls.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     ls.bind((addr, port))
     ls.listen(nlisten)
+    logging.debug("start listening")
 
     if cacert is not None and srvcrt is not None and srvkey is not None:
+        logging.debug("start sslizing")
         ls = sslize(ls, cacert, srvcrt, srvkey, False)
         if not isinstance(ls, SSL.Connection):
             return "ERROR could not initialize SSL connection: %s\n" % str(ls)
-
     ls.setblocking(False)
-
     return ls
 
 ###

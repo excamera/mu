@@ -3,6 +3,8 @@
 import collections
 import socket
 import traceback
+import time
+import logging
 
 from OpenSSL import SSL
 
@@ -39,6 +41,9 @@ class SocketNB(object):
 
         self._fileno = sock.fileno()
 
+    def __str__(self):
+        return str(self.fileno()) + str(self.getsockname()) + str(self.getpeername())
+
     def fileno(self):
         return self._fileno
 
@@ -53,6 +58,7 @@ class SocketNB(object):
         pass
 
     def close(self):
+        logging.debug("CLOSING SOCKET %s" + traceback.format_exc())
         if self.sock is None:
             return
 
@@ -186,7 +192,9 @@ class SocketNB(object):
 
     def do_handshake(self):
         self.update_flags()
+        logging.debug("doing handshake:"+str(self))
         if not isinstance(self.sock, SSL.Connection):
+            logging.debug("not SSL, returning:"+str(self))
             return
 
         self.handshaking = True
@@ -195,9 +203,13 @@ class SocketNB(object):
             self.sock.do_handshake()
         except SSL.WantWriteError:
             self.ssl_write = True
+            logging.debug("SSL.WantWriteError:"+str(self))
         except SSL.WantReadError:
+            logging.debug("SSL.WantReadError:"+str(self))
             pass
         except SSL.Error:
+            logging.error("SSL.Error:"+str(self))
             self.close()
         else:
             self.handshaking = False
+            logging.debug("handshaked: "+str(self))
