@@ -57,7 +57,11 @@ SSL_CTX * initialize_new_context()
 {
     OpenSSL::global_context();
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
     SSL_CTX * ret = SSL_CTX_new(TLSv1_2_client_method());
+#else
+    SSL_CTX * ret = SSL_CTX_new(TLS_client_method());
+#endif
     if ( not ret ) {
         throw ssl_error( "SSL_CTL_new" );
     }

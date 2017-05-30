@@ -10,9 +10,9 @@ class ServerInfo(object):
 
     quality_y = 30
     quality_str = "30_x"
-    keyframe_distance = 16
+    keyframe_distance = 8
 
-    video_name = "sintel-4k-y4m_24"
+    video_name = "sintel-4k-y4m_12"
     num_offset = 0
     num_parts = 1
     overprovision = 25
@@ -38,12 +38,17 @@ class DumpSSIMState(CommandListState):
     extra = "(dumping ssim)"
     pipelined = False
     nextState = FinalState
-    commandlist = [ ("OK:RETRIEVE(", "run:/usr/bin/perl ./y4m_chop_inplace.pl \"##TMPDIR##/orig.y4m\" \"##TMPDIR##/orig_\" 12 yesplease")
+    commandlist = [ ("OK:RETRIEVE(", "run:/usr/bin/perl ./y4m_chop_inplace.pl \"##TMPDIR##/orig.y4m\" \"##TMPDIR##/orig_\" 6 yesplease")
                   , ("OK:RETVAL(0)", "run:rm \"##TMPDIR##/orig_00000{4}.y4m\"")
-                  , ("OK:RETVAL(0)", "run:echo \"##TMPDIR##/xc.ivf\" | ./xc-decode-bundle {2} > \"##TMPDIR##/out.y4m\"")
-                  , ("OK:RETVAL(0)", "run:/usr/bin/perl ./y4m_chop_inplace.pl \"##TMPDIR##/out.y4m\" \"##TMPDIR##/out_\" 12 yesplease")
+                  , ("OK:RETVAL(0)", "run:echo \"##TMPDIR##/vpx.ivf\" | ./xc-decode-bundle {2} > \"##TMPDIR##/out.y4m\"")
+                  , ("OK:RETVAL(0)", "run:/usr/bin/perl ./y4m_chop_inplace.pl \"##TMPDIR##/out.y4m\" \"##TMPDIR##/out_\" 6 yesplease")
                   , ("OK:RETVAL(0)", "run:rm \"##TMPDIR##/out_00000{4}.y4m\"")
-                  , ("OK:RETVAL(0)", "run:./xc-framesize \"##TMPDIR##/xc.ivf\" > \"##TMPDIR##/out.txt\"")
+                  , ("OK:RETVAL(0)", "run:./xc-framesize \"##TMPDIR##/vpx.ivf\" > \"##TMPDIR##/out.txt\"")
+                  , ("OK:RETVAL(0)", "run:./dump_ssim \"##TMPDIR##/out_00000{5}.y4m\" \"##TMPDIR##/orig_00000{5}.y4m\" >> \"##TMPDIR##/out.txt\"")
+                  , ("OK:RETVAL(0)", "run:echo \"##TMPDIR##/xc.ivf\" | ./xc-decode-bundle {2} > \"##TMPDIR##/out.y4m\"")
+                  , ("OK:RETVAL(0)", "run:/usr/bin/perl ./y4m_chop_inplace.pl \"##TMPDIR##/out.y4m\" \"##TMPDIR##/out_\" 6 yesplease")
+                  , ("OK:RETVAL(0)", "run:rm \"##TMPDIR##/out_00000{4}.y4m\"")
+                  , ("OK:RETVAL(0)", "run:./xc-framesize \"##TMPDIR##/xc.ivf\" >> \"##TMPDIR##/out.txt\"")
                   , ("OK:RETVAL(0)", "run:./dump_ssim \"##TMPDIR##/out_00000{5}.y4m\" \"##TMPDIR##/orig_00000{5}.y4m\" >> \"##TMPDIR##/out.txt\"")
                   , ("OK:RETVAL(0)", "upload:{0}/out_ssim_{3}/{1}.txt\0##TMPDIR##/out.txt")
                   , ("OK:UPLOAD(", "quit:")
@@ -71,13 +76,14 @@ class DumpSSIMRetrieveState(CommandListState):
     pipelined = True
     nextState = DumpSSIMState
     commandlist = [ ("OK:HELLO", "retrieve:{0}/{1}.y4m\0##TMPDIR##/orig.y4m")
+                  , "retrieve:{0}/first_{3}/{1}.ivf\0##TMPDIR##/vpx.ivf"
                   , "retrieve:{0}/out_{3}/{1}.ivf\0##TMPDIR##/xc.ivf"
                   , "retrieve:{0}/final_state_{3}/{2}.state\0##TMPDIR##/final.state"
                   ]
 
     def __init__(self, prevState, aNum):
         if (aNum // 2) % ServerInfo.keyframe_distance == 0:
-            self.commandlist = [ self.commandlist[i] for i in (0, 1) ]
+            self.commandlist = [ self.commandlist[i] for i in (0, 1, 2) ]
 
         super(DumpSSIMRetrieveState, self).__init__(prevState, aNum)
 

@@ -159,7 +159,7 @@ def rand_green(string):
     ostr = ''
     for i in range(0, len(string)):
         ostr += '\033['
-        tgrn = greens[random.randint(0, ngreens-1)];
+        tgrn = greens[random.randint(0, ngreens-1)]
         rstblink = False
         rstinvert = False
         if random.randint(0, 3):

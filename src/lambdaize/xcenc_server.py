@@ -43,6 +43,8 @@ class ServerInfo(object):
 
     xcenc_invocation = "##INSTATEWAIT## ./xc-enc ##QUALITY## -w 0.75 -i y4m -O \"##TMPDIR##/final.state\" -o \"##TMPDIR##/output.ivf\" ##INSTATESWITCH## \"##TMPDIR##/input.y4m\" 2>&1"
     vpxenc_invocation = "./vpxenc --ivf -q --codec=vp8 --good --cpu-used=0 --end-usage=cq --min-q=0 --max-q=63 --cq-level=##QUALITY## --buf-initial-sz=10000 --buf-optimal-sz=20000 --buf-sz=40000 --undershoot-pct=100 --passes=2 --auto-alt-ref=1 --threads=1 --token-parts=0 --tune=ssim --target-bitrate=4294967295 -o \"##TMPDIR##/output.ivf\" \"##TMPDIR##/input.y4m\""
+
+    hashed_names = False
     ### commands look like this:
     # PHASE 1 # vpxenc and then xc-dump
     # PHASE 2 # xc-enc             -i y4m -O final.state -o output.ivf -r -I 0.state           -p prev.ivf                      input.y4m 2>&1
@@ -132,7 +134,11 @@ class XCEncRunState(CommandListState):
 
         pass_num = self.info['iter_key']
         if pass_num == 0:
-            self.nextState = XCEncDumpState
+            if ServerInfo.keyframe_distance == 1 and not ServerInfo.upload_states:
+                self.nextState = XCEncFinishState
+            else:
+                self.nextState = XCEncDumpState
+
             cmdstring = ServerInfo.vpxenc_invocation
         else:
             cmdstring = ServerInfo.xcenc_invocation
@@ -263,6 +269,7 @@ def main():
             , "srvcrt": ServerInfo.srvcrt
             , "srvkey": ServerInfo.srvkey
             , "bucket": ServerInfo.bucket
+            , "hash_s3keys": 1 if ServerInfo.hashed_names else 0
             }
     server.server_launch(ServerInfo, event, os.environ['AWS_ACCESS_KEY_ID'], os.environ['AWS_SECRET_ACCESS_KEY'])
 

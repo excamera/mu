@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import md5
 import os
 import select
 import shutil
@@ -172,6 +173,10 @@ def make_urstring(msg, vals, keyk, filek):
     if success:
         filename = filename.replace("##TMPDIR##", vals['_tmpdir'])
 
+    if vals.get('hash_s3keys'):
+        hashval = md5.md5(key.split('/')[-1]).hexdigest()[0:4]
+        key = "%s-%s" % (hashval, key)
+
     return (success, bucket, key, filename)
 
 make_uploadstring = lambda m, v: make_urstring(m, v, 'outkey', 'fromfile')
@@ -203,6 +208,7 @@ def lambda_handler(event, _):
     rm_tmpdir = int(event.get('rm_tmpdir', 1))
     bg_silent = int(event.get('bg_silent', 0))
     minimal_recode = int(event.get('minimal_recode', 0))
+    hash_s3keys = int(event.get('hash_s3keys', 0))
 
     if rm_tmpdir:
         os.system("rm -rf /tmp/*")
@@ -220,6 +226,7 @@ def lambda_handler(event, _):
            , 'bg_silent': bg_silent
            , 'minimal_recode': minimal_recode
            , 'run_iter': 0
+           , 'hash_s3keys': hash_s3keys
            , '_tmpdir': tempfile.mkdtemp(prefix="lambda_", dir="/tmp")
            }
     # default: just run the command and exit
