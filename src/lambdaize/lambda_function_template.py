@@ -181,6 +181,8 @@ make_retrievestring = lambda m, v: make_urstring(m, v, 'inkey', 'targfile')
 #  lambda enters here
 ###
 def lambda_handler(event, _):
+    lambda_start_ts = time.time()
+
     Defs.cmdstring = cmdstring
     Defs.make_cmdstring = staticmethod(make_cmdstring)
     Defs.make_retrievestring = staticmethod(make_retrievestring)
@@ -220,7 +222,6 @@ def lambda_handler(event, _):
            , 'run_iter': 0
            , '_tmpdir': tempfile.mkdtemp(prefix="lambda_", dir="/tmp")
            }
-
     # default: just run the command and exit
     if mode == 0:
         return handler.do_run('', {'event': event})
@@ -237,8 +238,11 @@ def lambda_handler(event, _):
             if Defs.debug:
                 print "***WARNING*** unclean client exit"
             break
-
-        (rfds, wfds, _) = select.select(rsocks, wsocks, [], Defs.timeout)
+        try:
+            (rfds, wfds, _) = select.select(rsocks, wsocks, [], Defs.timeout)
+        except Exception as e:
+            print "error:", e, "rsocks:", rsocks, "wsocks", wsocks
+            raise e
 
         if len(rfds) == 0 and len(wfds) == 0 and len(vals.setdefault('runinfo', [])) == 0:
             print "CLIENT TIMEOUT"
