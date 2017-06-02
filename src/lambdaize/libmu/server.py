@@ -214,7 +214,8 @@ def server_main_loop(states, constructor, server_info):
             outstr += '\n'
         sys.stdout.write(outstr + "SERVER status (%s): active=%d, done=%d, prelaunch=%d, error=%d" % (runTime, actStates, doneStates, waitStates, errStates))
         sys.stdout.flush()
-        server_info.ready_event.set()
+
+    server_info.ready_event.set()
 
     while True:
         dflags = rwsplit(states, rwflags)

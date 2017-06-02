@@ -58,7 +58,7 @@ class SocketNB(object):
         pass
 
     def close(self):
-        logging.debug("CLOSING SOCKET %s" + traceback.format_exc())
+        logging.debug("CLOSING SOCKET %s" % traceback.format_exc())
         if self.sock is None:
             return
 
