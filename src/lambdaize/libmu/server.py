@@ -105,14 +105,14 @@ def server_launch(server_info, event, akid, secret):
         event['addr'] = testsock.getsockname()[0]
         testsock.close()
 
-    pid = os.fork()
-    if pid == 0:
-    #if True:
+    #pid = os.fork()
+    #if pid == 0:
+    if True:
         # pylint: disable=no-member
         # (pylint can't "see" into C modules)
         total_parts = server_info.num_parts + getattr(server_info, 'overprovision', 0)
         pylaunch.launchpar(total_parts, server_info.lambda_function, akid, secret, json.dumps(event), server_info.regions)
-        sys.exit(0)
+        #sys.exit(0)
 
 ###
 #  set up server listen sock
