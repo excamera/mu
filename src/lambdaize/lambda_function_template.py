@@ -7,6 +7,7 @@ import shutil
 import socket
 import tempfile
 import zlib
+import time
 
 from OpenSSL import SSL
 

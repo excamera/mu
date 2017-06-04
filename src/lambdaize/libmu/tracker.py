@@ -105,20 +105,20 @@ def server_launch(server_info, event, akid, secret):
         event['addr'] = testsock.getsockname()[0]
         testsock.close()
 
-    pid = os.fork()
-    if pid == 0:
-    #if True:
+    #pid = os.fork()
+    #if pid == 0:
+    if True:
         # pylint: disable=no-member
         # (pylint can't "see" into C modules)
         total_parts = server_info.num_parts + getattr(server_info, 'overprovision', 0)
         pylaunch.launchpar(total_parts, server_info.lambda_function, akid, secret, json.dumps(event), server_info.regions)
-        sys.exit(0)
+        #sys.exit(0)
 
 ###
 #  set up server listen sock
 ###
 def setup_server_listen(server_info):
-    return libmu.util.listen_socket('0.0.0.0', server_info.port_number, server_info.cacert, server_info.srvcrt, server_info.srvkey, server_info.num_parts + 10)
+    return libmu.util.listen_socket('0.0.0.0', server_info.port_number, server_info.cacert, server_info.srvcrt, server_info.srvkey, 5000)
 
 ###
 #  server mainloop
@@ -212,8 +212,7 @@ def server_main_loop(states, constructor, server_info):
             outstr += '\n'
         sys.stdout.write(outstr + "SERVER status (%s): active=%d, done=%d, prelaunch=%d, error=%d" % (runTime, actStates, doneStates, waitStates, errStates))
         sys.stdout.flush()
-        if hasattr(server_info, 'ready_event'):
-            server_info.ready_event.set()
+        server_info.ready_event.set()
 
     while True:
         dflags = rwsplit(states, rwflags)
