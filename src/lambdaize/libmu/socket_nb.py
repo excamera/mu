@@ -42,7 +42,7 @@ class SocketNB(object):
         self._fileno = sock.fileno()
 
     def __str__(self):
-        return str(self.fileno()) + str(self.getsockname()) + str(self.getpeername())
+        return str(self.fileno())
 
     def fileno(self):
         return self._fileno
