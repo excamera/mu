@@ -1,753 +1,227 @@
 #!/usr/bin/python
-
-import cProfile
-import datetime
-import fcntl
-import getopt
+import Queue
 import json
-import os
 import select
 import socket
-import struct
-import sys
-import termios
-import time
+import threading
 import logging
 
 import pylaunch
+from collections import defaultdict
+
 import libmu.defs
 import libmu.machine_state
 import libmu.util
 
-###
-#  handle new connection on server listening socket
-###
-def _handle_server_sock(ls, states, state_fd_map, state_actNum_map, server_info, constructor):
-    (ns, _) = ls.accept()
-    ns.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-    ns.setblocking(False)
 
-    this_actor = len(states)
-    if getattr(server_info, 'keyframe_distance', None) is not None:
-        (actor_number, group_number, _) = _compute_actor_number(this_actor, server_info.keyframe_distance, server_info.num_parts)
-    else:
-        actor_number = this_actor
-        group_number = None
+class Task(object):
 
-    if hasattr(server_info, 'state_srv_threads') and group_number is not None:
-        nstate = constructor(ns, actor_number, group_number)
-    else:
-        nstate = constructor(ns, actor_number)
-    nstate.do_handshake()
+    def __init__(self, lambda_func, init_state, actor_num, event, regions=None):
+        self.lambda_func = lambda_func
+        self.constructor = init_state
+        self.actor_num = actor_num
+        self.event = event
+        self.regions = ["us-east-1"] if regions is None else regions
+        self.current_state = None
+        self.rwflag = 0
 
-    states.append(nstate)
-    state_fd_map[nstate.fileno()] = this_actor
-    state_actNum_map[actor_number] = this_actor
+    def start(self, ns):
+        self.current_state = self.constructor(ns, self.actor_num)
+        self.current_state.do_handshake()
 
-    if len(states) == server_info.num_parts:
-        # no need to listen any longer, we have all our connections
+    def do_handle(self):
+        self.current_state = self.current_state.do_handle()
+
+    def do_read(self):
+        self.current_state = self.current_state.do_read()
+
+    def do_write(self):
+        self.current_state = self.current_state.do_write()
+
+
+class Tracker(object):
+
+    config = defaultdict(lambda: None)
+
+    with open('mu_conf.json', 'r') as f:
+        c = json.load(f)
+    for k, v in c.iteritems():
+        config[k] = v
+
+    started = False
+    started_lock = threading.Lock()
+    should_stop = False
+
+    submitted_queue = Queue.Queue()
+    waiting_queue = Queue.Queue()
+
+    with open(config['aws_access_key_id_file'], 'r') as f:
+        akid = f.read().strip()
+    with open(config['aws_secret_access_key_file'], 'r') as f:
+        secret = f.read().strip()
+
+    cacert = libmu.util.read_pem(config['cacert_file']) if config['cacert_file'] is not None else None
+    srvcrt = libmu.util.read_pem(config['srvcrt_file']) if config['srvcrt_file'] is not None else None
+    srvkey = libmu.util.read_pem(config['srvkey_file']) if config['srvkey_file'] is not None else None
+
+    @classmethod
+    def _handle_server_sock(cls, ls, tasks, fd_task_map):
+        (ns, _) = ls.accept()  # may be changed to accept more than one conn
+        ns.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        ns.setblocking(False)
+
         try:
-            ls.shutdown()
-            ls.close()
-        except:
-            logging.warning("failure shutting down the lsock")
-            pass
+            new_task = Tracker.waiting_queue.get(block=False)  # assume all tasks are the same
+        except Queue.Empty as e:
+            logging.warning("get response from lambda, but no one's waiting?")
+            return
 
-        ls = None
+        new_task.start(ns)
 
-    return ls
+        tasks.append(new_task)
+        fd_task_map[new_task.current_state.fileno()] = new_task
 
-###
-#  rotating goose: compute where this actor goes
-###
-def _compute_actor_number(thisAct, kfDist, numParts):
-    rem = numParts % kfDist
-    numGroups = numParts // kfDist + (1 if rem != 0 else 0)
+    @classmethod
+    def _main_loop(cls):
+        lsock = libmu.util.listen_socket('0.0.0.0', cls.config['port_number'], cls.cacert, cls.srvcrt,
+                                         cls.srvkey, cls.config['backlog'])
+        lsock_fd = lsock.fileno()
 
-    if rem == 0 or thisAct < numGroups * rem:
-        thisGroup = thisAct % numGroups
-        thisPlace = thisAct // numGroups
-    else:
-        effAct = thisAct - rem * numGroups
-        effGroups = numGroups - 1
-        thisGroup = effAct % effGroups
-        thisPlace = rem + effAct // effGroups
+        tasks = []
+        fd_task_map = {}
+        poll_obj = select.poll()
+        poll_obj.register(lsock_fd, select.POLLIN)
+        npasses_out = 0
 
-    actorNum = thisGroup * kfDist + thisPlace
-    return (actorNum, thisGroup, thisPlace)
+        while True:
+            if cls.should_stop:
+                if lsock is not None:
+                    try:
+                        lsock.shutdown(0)
+                        lsock.close()
+                    except:
+                        logging.warning("failure shutting down the lsock")
+                        pass
+                    lsock = None
 
-###
-#  test the above function
-###
-def _test_compute(kfDist, numParts):
-    testvec = ['_' * kfDist] * (numParts // kfDist)
-    if numParts % kfDist != 0:
-        testvec += ['_' * (numParts % kfDist)]
-    print str(testvec)
+            dflags = []
+            for (tsk, idx) in zip(tasks, range(0, len(tasks))):
+                st = tsk.current_state
+                val = 0
+                if st.sock is not None:
+                    if not isinstance(st, libmu.machine_state.TerminalState):  # always listening
+                        val = val | select.POLLIN
 
-    for i in range(0, numParts):
-        (actorNum, thisGroup, thisPlace) = _compute_actor_number(i, kfDist, numParts)
-        this_string = testvec[thisGroup]
-        this_string = this_string[:thisPlace] + 'x' + this_string[thisPlace + 1:]
-        testvec[thisGroup] = this_string
-        print str(testvec), i, actorNum, thisGroup, thisPlace
+                    if st.ssl_write or st.want_write:
+                        val = val | select.POLLOUT
 
-###
-#  server: launch a bunch of lambda instances using pylaunch
-###
-def server_launch(server_info, event, akid, secret):
-    if event.get('addr') is None:
-        # figure out what the IP address of the interface talking to AWS is
-        # NOTE if you have different interfaces routing to different regions
-        #      this won't work. I'm assuming that's unlikely.
-        testsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        testsock.connect(("lambda." + server_info.regions[0] + ".amazonaws.com", 443))
-        event['addr'] = testsock.getsockname()[0]
-        testsock.close()
-
-    #pid = os.fork()
-    #if pid == 0:
-    if True:
-        # pylint: disable=no-member
-        # (pylint can't "see" into C modules)
-        total_parts = server_info.num_parts + getattr(server_info, 'overprovision', 0)
-        pylaunch.launchpar(total_parts, server_info.lambda_function, akid, secret, json.dumps(event), server_info.regions)
-        #sys.exit(0)
-
-###
-#  set up server listen sock
-###
-def setup_server_listen(server_info):
-    return libmu.util.listen_socket('0.0.0.0', server_info.port_number, server_info.cacert, server_info.srvcrt, server_info.srvkey, 5000)
-
-###
-#  server mainloop
-###
-def server_main_loop(states, constructor, server_info):
-    server_info.start_time = time.time()
-    # handle profiling if specified
-    if server_info.profiling:
-        pr = cProfile.Profile()
-        pr.enable()
-
-    lsock = setup_server_listen(server_info)
-    lsock_fd = lsock.fileno()
-
-    def rwsplit(sts, ret):
-        diffs = []
-        ret += [0] * (len(sts) - len(ret))
-        for (st, idx) in zip(sts, range(0, len(sts))):
-            val = 0
-            if st.sock is not None:
-                if not isinstance(st, libmu.machine_state.TerminalState):
-                    val = val | select.POLLIN
-
-                if st.ssl_write or st.want_write:
-                    val = val | select.POLLOUT
-
-                if val != ret[idx]:
-                    ret[idx] = val
-                    diffs.append(idx)
-
-            else:
-                ret[idx] = 0
-                diffs.append(idx)
-                if not isinstance(st, libmu.machine_state.TerminalState):
-                    sts[idx] = libmu.machine_state.ErrorState(sts[idx], "sock closed in %s" % str(sts[idx]))
-
-        return diffs
-    state_fd_map = {}
-    state_actNum_map = {}
-    rwflags = []
-    poll_obj = select.poll()
-    poll_obj.register(lsock_fd, select.POLLIN)
-    npasses_out = 0
-    start_time = time.time()
-
-    if getattr(server_info, 'kill_state', None) is None and getattr(server_info, 'kill_time', None) is not None:
-        class TerminatedState(libmu.machine_state.ErrorState):
-            extra = "(TERMINATED)"
-        server_info.kill_state = TerminatedState
-    try:
-        (screen_height, screen_width, _, _) = struct.unpack("HHHH", fcntl.ioctl(0, termios.TIOCGWINSZ, struct.pack("HHHH", 0, 0, 0, 0)))
-    except:
-        screen_width = 80
-        screen_height = 50
-    n_per_line = 1 + server_info.num_parts // screen_height
-    n_chars_maybe = max(screen_width // n_per_line, 24)
-    n_across = max(screen_width // n_chars_maybe, 1)
-    n_chars = screen_width // n_across - 1
-
-    def show_status():
-        actStates = len([ 1 for v in rwflags if v != 0 ])
-        errStates = len([ 1 for s in states if isinstance(s, libmu.machine_state.ErrorState) ])
-        doneStates = len([ 1 for s in states if isinstance(s, libmu.machine_state.TerminalState) ]) - errStates
-        waitStates = server_info.num_parts - len(states)
-        runTime = str(datetime.timedelta(seconds=time.time() - start_time))
-
-        # enhanced output in debugging mode
-        #if errStates == 0 and not libmu.defs.Defs.debug:
-        #    # make output pretty as long as there aren't errors
-        #    sys.stdout.write("\033[3J\033[H\033[2J")
-        #    sys.stdout.flush()
-        n_printed = 0
-        outstr = '\n'
-        for s in states:
-            s_str = str(s)
-            lsstr = len(s_str)
-            s_str = s_str[:n_chars]
-            if isinstance(s, libmu.machine_state.ErrorState):
-                s_str = "\033[1;31m" + s_str + "\033[0m"
-            elif libmu.defs.Defs.fun:
-                s_str = libmu.util.rand_green(s_str)
-            outstr += s_str
-            outstr += ' ' * (n_chars - min(lsstr, n_chars))
-            n_printed += 1
-            if n_printed == n_across:
-                outstr += '\n'
-                n_printed = 0
-            else:
-                outstr += ' '
-        if n_printed != 0:
-            outstr += '\n'
-        sys.stdout.write(outstr + "SERVER status (%s): active=%d, done=%d, prelaunch=%d, error=%d" % (runTime, actStates, doneStates, waitStates, errStates))
-        sys.stdout.flush()
-        server_info.ready_event.set()
-
-    while True:
-        dflags = rwsplit(states, rwflags)
-
-        if all([ v == 0 for v in rwflags ]) and lsock is None:
-            break
-
-        for idx in dflags:
-            if rwflags[idx] != 0:
-                poll_obj.register(states[idx], rwflags[idx])
-            else:
-                try:
-                    poll_obj.unregister(states[idx])
-                except:
-                    pass
-
-        if lsock is None and lsock_fd is not None:
-            poll_obj.unregister(lsock_fd)
-            lsock_fd = None
-
-        now = time.time()
-        if getattr(server_info, 'kill_time', None) is not None:
-            for killId in reversed([ stId for stId in range(0, len(states)) if not isinstance(states[stId], libmu.machine_state.TerminalState) and now - states[stId].timestamps[0] > server_info.kill_time ]):
-                states[killId] = server_info.kill_state(states[killId], "terminated after %d seconds" % server_info.kill_time)
-
-        if npasses_out == 100:
-            npasses_out = 0
-            show_status()
-
-        pfds = poll_obj.poll(2000)
-        npasses_out += 1
-
-        if len(pfds) == 0:
-            show_status()
-            continue
-
-        # look for readable FDs
-        for (fd, ev) in pfds:
-            if (ev & select.POLLIN) != 0:
-                if lsock is not None and fd == lsock_fd:
-                    logging.debug("listening sock got data in")
-                    lsock = _handle_server_sock(lsock, states, state_fd_map, state_actNum_map, server_info, constructor)
+                    if val != tsk.rwflag:
+                        tsk.rwflag = val
+                        dflags.append(idx)
 
                 else:
-                    logging.debug("conn sock got data in")
-                    stateIdx = state_fd_map[fd]
-                    r = states[stateIdx]
-                    rnext = r.do_read()
-                    states[stateIdx] = rnext
+                    tsk.rwflag = 0
+                    dflags.append(idx)
+                    if not isinstance(st, libmu.machine_state.TerminalState):
+                        tsk.current_state = libmu.machine_state.ErrorState(tsk.current_state, "sock closed in %s" % str(tsk))
+                        logging.warning("socket closed abnormally: %s" % str(tsk))
 
-        for (fd, ev) in pfds:
-            if (ev & select.POLLOUT) != 0:
-                stateIdx = state_fd_map[fd]
-                w = states[stateIdx]
-                wnext = w.do_write()
-                states[stateIdx] = wnext
+            for idx in dflags:
+                if tasks[idx].rwflag != 0:
+                    poll_obj.register(tasks[idx].current_state, tasks[idx].rwflag)
+                else:
+                    try:
+                        poll_obj.unregister(tasks[idx].current_state)
+                    except Exception as e:
+                        logging.error("unregister: "+str(e.message))
+                        pass
 
-        for rnext in [ st for st in states if not isinstance(st, libmu.machine_state.TerminalState) ]:
-            if rnext.want_handle:
-                rnext = rnext.do_handle()
-            stateIdx = state_actNum_map[rnext.actorNum]
-            states[stateIdx] = rnext
+            pfds = poll_obj.poll(2000)
+            npasses_out += 1
 
-    fo = None
-    error = []
-    errvals = []
-    if server_info.out_file is not None:
-        fo = open(server_info.out_file, 'w')
+            if len(pfds) == 0:
+                continue
 
-    for (state, num) in zip(states, range(0, len(states))):
-        state.close()
-        if isinstance(state, libmu.machine_state.ErrorState) or not isinstance(state, libmu.machine_state.TerminalState):
-            error.append(num)
-            errvals.append(repr(state))
+            # look for readable FDs
+            for (fd, ev) in pfds:
+                if (ev & select.POLLIN) != 0:
+                    if lsock is not None and fd == lsock_fd:
+                        logging.debug("listening sock got data in")
+                        cls._handle_server_sock(lsock, tasks, fd_task_map)
 
-        if fo is not None:
-            timestamps = [ ts - server_info.start_time for ts in state.timestamps ]
-            tslog = zip(timestamps, state.stateinfo)
-            fo.write("%d:%s\n" % (state.actorNum, str(tslog)))
+                    else:
+                        logging.debug("conn sock got data in")
+                        task = fd_task_map[fd]
+                        task.do_read()
 
-    if server_info.profiling:
-        pr.disable()
-        pr.dump_stats(server_info.profiling)
+            for (fd, ev) in pfds:
+                if (ev & select.POLLOUT) != 0:
+                    logging.debug("conn sock got data out")
+                    task = fd_task_map[fd]
+                    task.do_write()
 
-    if error:
-        evals = str(error) + "\n  " + "\n  ".join(errvals)
-        if fo is not None:
-            fo.write("ERR:%s\n" % str(error))
-            fo.close() # we'll never get to the close below
-        raise Exception("ERROR: the following workers terminated abnormally:\n%s" % evals)
+            for tsk in [t for t in tasks if isinstance(t.current_state, libmu.machine_state.TerminalState)]:
+                try:
+                    poll_obj.unregister(tsk.current_state)
+                except Exception as e:
+                    logging.warning(e.message)
+                try:
+                    tsk.current_state.close()
+                except Exception as e:
+                    logging.warning(e.message)
+                del fd_task_map[tsk.current_state.fileno()]
 
-    if fo is not None:
-        fo.close()
+            tasks = [t for t in tasks if not isinstance(t.current_state, libmu.machine_state.TerminalState)]
+            for tsk in tasks:
+                if tsk.current_state.want_handle:
+                    tsk.do_handle()
 
-###
-#  generate server usage message and optstring from ServerInfo object
-###
-def usage_str(defaults):
-    oStr = ""
-    uStr = "Usage: %s [args ...]\n\n" % sys.argv[0]
+    @classmethod
+    def _invocation_loop(cls):
+        testsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        testsock.connect(("lambda.us-east-1.amazonaws.com", 443))  # assume that's correct
+        addr = testsock.getsockname()[0]
+        testsock.close()
 
-    if hasattr(defaults, 'lambda_function'):
-        uStr += "You must also set the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY envvars.\n\n"
+        while not cls.should_stop:
+            pending = []
+            pending.append(cls.submitted_queue.get(block=True))
+            while True:
+                try:
+                    pending.append(cls.submitted_queue.get(block=True, timeout=0.01))  # 10ms without a submission, we consider it a "batch"
+                except Queue.Empty:
+                    break
+            for t in pending:
+                cls.waiting_queue.put(t)
+            pending[0].event['addr'] = addr
+            logging.debug("akid: "+cls.akid)
+            logging.debug("secret: "+cls.secret)
+            pylaunch.launchpar(len(pending), pending[0].lambda_func, cls.akid, cls.secret,
+                               json.dumps(pending[0].event), pending[0].regions)  # currently assume all the tasks use same function/region
 
-    uStr += "  switch         description                                     default\n"
-    uStr += "  --             --                                              --\n"
-    uStr += "  -U:            show this message\n"
-    uStr += "  -D:            enable debug                                    (disabled)\n"
-    oStr += "UD"
+    @classmethod
+    def _start(cls):
+        with cls.started_lock:
+            if cls.started:
+                return
+            mt = threading.Thread(target=cls._main_loop)
+            mt.setDaemon(True)
+            mt.start()
+            it = threading.Thread(target=cls._invocation_loop)
+            it.setDaemon(True)
+            it.start()
+            cls.started = True
 
-    if hasattr(defaults, 'out_file'):
-        oFileStr = "'%s'" % defaults.out_file if defaults.out_file is not None else "None"
-        uStr += "  -O oFile:      state machine times output file                 (%s)\n" % oFileStr
-        oStr += "O:"
+    @classmethod
+    def stop(cls):
+        cls.should_stop = True
 
-    if hasattr(defaults, 'profiling'):
-        pFileStr = "'%s'" % defaults.profiling if defaults.profiling is not None else "None"
-        uStr += "  -P pFile:      profiling data output file                      (%s)\n" % pFileStr
-        oStr += "P:"
+    @classmethod
+    def submit(cls, task):
+        if not cls.started:
+            cls._start()
+        cls.submitted_queue.put(task)
 
-    uStr += "\n  -n nParts:     launch nParts lambdas                           (%d)\n" % defaults.num_parts
-    oStr += "n:"
-
-    if hasattr(defaults, 'overprovision'):
-        uStr += "  -X nExtra:     overprovision lambda invocations by nExtra      (%d)\n" % defaults.overprovision
-        oStr += "X:"
-
-    if hasattr(defaults, 'num_list'):
-        uStr += "  -N a,b,c,...   run clients numbered exactly a, b, c, ...       (None)\n"
-        oStr += "N:"
-
-    if hasattr(defaults, 'num_frames'):
-        uStr += "  -f nFrames:    number of frames to process in each chunk       (%d)\n" % defaults.num_frames
-        oStr += "f:"
-
-    if hasattr(defaults, 'num_offset'):
-        uStr += "  -o nOffset:    skip this many input chunks when processing     (%d)\n" % defaults.num_offset
-        oStr += "o:"
-
-    if hasattr(defaults, 'quality_values'):
-        qvals_str = ','.join([ str(x) for x in defaults.quality_values ])
-        uStr += "\n  -q qvals:      use qvals as the quality values                 (%s)\n" % qvals_str
-        oStr += "q:"
-
-    if hasattr(defaults, 'run_xcenc'):
-        uStr += "  -x:            run xc-enc                                      (run vpxenc)\n"
-        oStr += "x"
-
-    if hasattr(defaults, 'quality_y'):
-        uStr += "  -Y y_ac_qi:    use y_ac_qi for Y quantizer                     (%d)\n" % defaults.quality_y
-        oStr += "Y:"
-
-    if hasattr(defaults, 'quality_s'):
-        uStr += "  -S s_ac_qi:    use s_ac_qi for Y quantizer                     (%s)\n" % str(defaults.quality_s)
-        oStr += "S:"
-
-    if hasattr(defaults, 'keyframe_distance'):
-        uStr += "  -K kfDist:     force keyframe every kfDist chunks              (%s)\n" % str(defaults.keyframe_distance)
-        oStr += "K:"
-
-    if hasattr(defaults, 'upload_states'):
-        uStr += "  -u:            upload prev.state and final.state               (%s)\n" % str(defaults.upload_states)
-        oStr += "u"
-
-    if hasattr(defaults, 'num_passes'):
-        num_pass_str = ','.join([ str(x) for x in defaults.num_passes ])
-        min_pass_str = ','.join([ str(x) for x in defaults.min_passes ])
-        uStr += "  -p w,x,y,z:    ph1,ph2,ph3,ph4 num passes                      (%s)\n" % num_pass_str
-        uStr += "                 min for each phase is %s\n" % min_pass_str
-        oStr += "p:"
-
-    if hasattr(defaults, 'video_name'):
-        uStr += "\n  -v vidName:    video name                                      ('%s')\n" % defaults.video_name
-        oStr += "v:"
-
-    if hasattr(defaults, 'bucket'):
-        uStr += "  -b bucket:     S3 bucket in which videos are stored            ('%s')\n" % defaults.bucket
-        oStr += "b:"
-
-    if hasattr(defaults, 'in_format'):
-        uStr += "  -i inFormat:   input format ('png16', 'y4m_06', etc)           ('%s')\n" % defaults.in_format
-        oStr += "i:"
-
-    if hasattr(defaults, 'host_addr'):
-        uStr += "  -h hostAddr:   this server's address                           (auto)\n"
-        oStr += "h:"
-
-    uStr += "\n  -t portNum:    listen on portNum                               (%d)\n" % defaults.port_number
-    oStr += "t:"
-
-    if hasattr(defaults, 'state_srv_addr'):
-        uStr += "  -H stHostAddr: hostname or IP for nat punching host            (%s)\n" % defaults.state_srv_addr
-        oStr += "H:"
-
-    if hasattr(defaults, 'state_srv_port'):
-        uStr += "  -T stHostPort: port number for nat punching host               (%s)\n" % defaults.state_srv_port
-        oStr += "T:"
-
-    if hasattr(defaults, 'state_srv_threads'):
-        uStr += "  -R nThreads:   state server runs nThreads on sequential ports  (%d)\n" % defaults.state_srv_threads
-        oStr += "R:"
-
-    if hasattr(defaults, 'lambda_function'):
-        uStr += "  -l fnName:     lambda function name                            ('%s')\n" % defaults.lambda_function
-        oStr += "l:"
-
-    if hasattr(defaults, 'regions'):
-        uStr += "  -r r1,r2,...:  comma-separated list of regions                 ('%s')\n" % ','.join(defaults.regions)
-        oStr += "r:"
-
-    if hasattr(defaults, 'kill_time'):
-        uStr += "  -m timeout:    timeout in seconds before killing worker        (%s)\n" % str(defaults.kill_time)
-        oStr += "m:"
-
-    if hasattr(defaults, 'hashed_names'):
-        uStr += "  -M             use MD5 hash for input files                    ('%s')\n" % defaults.lambda_function
-        oStr += "M"
-
-    uStr += "\n  -c caCert:     CA certificate file                             (None)\n"
-    uStr += "  -s srvCert:    server certificate file                         (None)\n"
-    uStr += "  -k srvKey:     server key file                                 (None)\n"
-    uStr += "     (hint: you can generate new keys with <mu>/bin/genkeys.sh)\n"
-    uStr += "     (hint: you can use CA_CERT, SRV_CERT, SRV_KEY envvars instead)\n"
-    oStr += "c:s:k:"
-
-    return (uStr, oStr)
-
-def to_numlist(arg, outlist):
-    vals = arg.replace(' ', '').split(',')
-    del outlist[:]
-    for val in vals:
-        if len(val) > 0:
-            outlist.append(int(val))
-
-def options(server_info):
-    (uStr, oStr) = usage_str(server_info)
-
-    try:
-        opts, args = getopt.getopt(sys.argv[1:], oStr)
-    except getopt.GetoptError as err:
-        print str(err)
-        print uStr
-        sys.exit(1)
-
-    if len(args) > 0:
-        print "ERROR: Extraneous arguments '%s'" % ' '.join(args)
-        print
-        print uStr
-        sys.exit(1)
-
-    cacertfile = os.environ.get('CA_CERT')
-    srvcrtfile = os.environ.get('SRV_CERT')
-    srvkeyfile = os.environ.get('SRV_KEY')
-
-    for (opt, arg) in opts:
-        if opt == "-o":
-            if hasattr(server_info, 'num_list'):
-                assert server_info.num_list is None, "You cannot specify both -N and -o!!!"
-            server_info.num_offset = int(arg)
-        elif opt == "-f":
-            server_info.num_frames = int(arg)
-        elif opt == "-n":
-            if hasattr(server_info, 'num_list'):
-                assert server_info.num_list is None, "You cannot specify both -N and -n!!!"
-            server_info.num_parts = int(arg)
-        elif opt == "-v":
-            server_info.video_name = arg
-        elif opt == "-l":
-            server_info.lambda_function = arg
-        elif opt == "-r":
-            server_info.regions = arg.split(',')
-        elif opt == "-D":
-            libmu.defs.Defs.debug = True
-        elif opt == "-c":
-            cacertfile = arg
-        elif opt == "-s":
-            srvcrtfile = arg
-        elif opt == "-k":
-            srvkeyfile = arg
-        elif opt == "-b":
-            server_info.bucket = arg
-        elif opt == "-i":
-            server_info.in_format = arg
-        elif opt == "-U":
-            print uStr
-            sys.exit(1)
-        elif opt == "-O":
-            server_info.out_file = arg
-        elif opt == "-P":
-            server_info.profiling = arg
-        elif opt == "-p":
-            try:
-                (p1, p2, p3, p4) = arg.replace(' ', '').split(',')
-                p1 = int(p1)
-                p2 = int(p2)
-                p3 = int(p3)
-                p4 = int(p4)
-                assert p1 >= server_info.min_passes[0] and \
-                       p2 >= server_info.min_passes[1] and \
-                       p3 >= server_info.min_passes[2] and \
-                       p4 >= server_info.min_passes[3]
-                server_info.num_passes = (p1, p2, p3, p4)
-                server_info.tot_passes = sum(server_info.num_passes)
-            except AssertionError:
-                print "ERROR: Invalid number of passes specified."
-                print uStr
-                sys.exit(1)
-            except:
-                print "ERROR: Invalid argument to -p: '%s'" % arg
-                print uStr
-                sys.exit(1)
-        elif opt == "-N" or opt == "-q":
-            to_numlist(arg, server_info.num_list)
-            server_info.num_parts = len(server_info.num_list)
-            assert len(server_info.num_list) > 0
-        elif opt == "-t":
-            server_info.port_number = int(arg)
-        elif opt == "-h":
-            server_info.host_addr = arg
-        elif opt == "-q":
-            to_numlist(arg, server_info.quality_values)
-            server_info.quality_valstring = '_'.join([ str(x) for x in server_info.quality_values ])
-            assert len(server_info.quality_values) > 0
-        elif opt == "-Y":
-            server_info.quality_y = int(arg)
-        elif opt == "-H":
-            server_info.state_srv_addr = arg
-        elif opt == "-T":
-            server_info.state_srv_port = int(arg)
-        elif opt == "-R":
-            server_info.state_srv_threads = int(arg)
-        elif opt == "-x":
-            server_info.run_xcenc = True
-        elif opt == "-u":
-            server_info.upload_states = True
-        elif opt == "-K":
-            server_info.keyframe_distance = int(arg)
-        elif opt == "-X":
-            server_info.overprovision = int(arg)
-        elif opt == "-S":
-            server_info.quality_s = int(arg)
-        elif opt == "-M":
-            server_info.hashed_names = True
-        elif opt == "-m":
-            server_info.kill_time = int(arg)
-        else:
-            assert False, "logic error: got unexpected option %s from getopt" % opt
-
-    if hasattr(server_info, 'quality_y') and hasattr(server_info, 'quality_str'):
-        qs = getattr(server_info, 'quality_s', None)
-        qStr = str(qs) if qs is not None else 'x'
-        ks = getattr(server_info, 'keyframe_distance', None)
-        kStr = ('_k%d' % ks) if ks is not None else ''
-        server_info.quality_str = "%d_%s%s" % (server_info.quality_y, qStr, kStr)
-
-    if hasattr(server_info, 'regions') and len(server_info.regions) == 0:
-        print "ERROR: region list cannot be empty"
-        print
-        print uStr
-        sys.exit(1)
-
-    if hasattr(server_info, 'lambda_function') and (os.environ.get("AWS_ACCESS_KEY_ID") is None or os.environ.get("AWS_SECRET_ACCESS_KEY") is None):
-        print "ERROR: You must set the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY envvars"
-        print
-        print uStr
-        sys.exit(1)
-
-    if hasattr(server_info, 'num_passes'):
-        if getattr(server_info, 'keyframe_distance', None):
-            server_info.num_passes = (1, server_info.keyframe_distance, 0, 0)
-        else:
-            assert server_info.num_passes[1] == 0, "In swframe mode, phase two is not supported."
-
-    for f in [cacertfile, srvcrtfile, srvkeyfile]:
-        try:
-            os.stat(str(f))
-        except:
-            print "ERROR: Cannot open SSL cert or key file '%s'" % str(f)
-            print
-            print uStr
-            sys.exit(1)
-
-    server_info.cacert = libmu.util.read_pem(cacertfile)
-    server_info.srvcrt = libmu.util.read_pem(srvcrtfile)
-    server_info.srvkey = libmu.util.read_pem(srvkeyfile)
-
-
-###
-# make coordinator callable instead of only run in cmd line
-# convert argv parameters into arguments to be parsed
-###
-def options2(server_info, argv):
-    (uStr, oStr) = usage_str(server_info)
-
-    try:
-        opts, args = getopt.getopt(argv, oStr)
-    except getopt.GetoptError as err:
-        print str(err)
-        print uStr
-        sys.exit(1)
-
-    if len(args) > 0:
-        print "ERROR: Extraneous arguments '%s'" % ' '.join(args)
-        print
-        print uStr
-        sys.exit(1)
-
-    # cacertfile = os.environ.get('CA_CERT')
-    srvcrtfile = os.environ.get('SRV_CERT')
-    srvkeyfile = os.environ.get('SRV_KEY')
-
-    for (opt, arg) in opts:
-        if opt == "-o":
-            if hasattr(server_info, 'num_list'):
-                assert server_info.num_list is None, "You cannot specify both -N and -o!!!"
-            server_info.num_offset = int(arg)
-        elif opt == "-f":
-            server_info.num_frames = int(arg)
-        elif opt == "-n":
-            if hasattr(server_info, 'num_list'):
-                assert server_info.num_list is None, "You cannot specify both -N and -n!!!"
-            server_info.num_parts = int(arg)
-        elif opt == "-v":
-            server_info.video_name = arg
-        elif opt == "-l":
-            server_info.lambda_function = arg
-        elif opt == "-r":
-            server_info.regions = arg.split(',')
-        elif opt == "-D":
-            libmu.defs.Defs.debug = True
-        elif opt == "-c":
-            cacertfile = arg
-        elif opt == "-s":
-            srvcrtfile = arg
-        elif opt == "-k":
-            srvkeyfile = arg
-        elif opt == "-b":
-            server_info.bucket = arg
-        elif opt == "-i":
-            server_info.in_format = arg
-        elif opt == "-U":
-            print uStr
-            sys.exit(1)
-        elif opt == "-O":
-            server_info.out_file = arg
-        elif opt == "-P":
-            server_info.profiling = arg
-        elif opt == "-p":
-            try:
-                (p1, p2, p3, p4) = arg.replace(' ', '').split(',')
-                p1 = int(p1)
-                p2 = int(p2)
-                p3 = int(p3)
-                p4 = int(p4)
-                assert p1 >= server_info.min_passes[0] and \
-                       p2 >= server_info.min_passes[1] and \
-                       p3 >= server_info.min_passes[2] and \
-                       p4 >= server_info.min_passes[3]
-                server_info.num_passes = (p1, p2, p3, p4)
-                server_info.tot_passes = sum(server_info.num_passes)
-            except AssertionError:
-                print "ERROR: Invalid number of passes specified."
-                print uStr
-                sys.exit(1)
-            except:
-                print "ERROR: Invalid argument to -p: '%s'" % arg
-                print uStr
-                sys.exit(1)
-        elif opt == "-N" or opt == "-q":
-            to_numlist(arg, server_info.num_list)
-            server_info.num_parts = len(server_info.num_list)
-            assert len(server_info.num_list) > 0
-        elif opt == "-t":
-            server_info.port_number = int(arg)
-        elif opt == "-h":
-            server_info.host_addr = arg
-        elif opt == "-q":
-            to_numlist(arg, server_info.quality_values)
-            server_info.quality_valstring = '_'.join([ str(x) for x in server_info.quality_values ])
-            assert len(server_info.quality_values) > 0
-        elif opt == "-Y":
-            server_info.quality_y = int(arg)
-        elif opt == "-H":
-            server_info.state_srv_addr = arg
-        elif opt == "-T":
-            server_info.state_srv_port = int(arg)
-        elif opt == "-R":
-            server_info.state_srv_threads = int(arg)
-        elif opt == "-x":
-            server_info.run_xcenc = True
-        elif opt == "-u":
-            server_info.upload_states = True
-        elif opt == "-K":
-            server_info.keyframe_distance = int(arg)
-        elif opt == "-X":
-            server_info.overprovision = int(arg)
-        elif opt == "-S":
-            server_info.quality_s = int(arg)
-        else:
-            assert False, "logic error: got unexpected option %s from getopt" % opt
-
-    if hasattr(server_info, 'quality_y') and hasattr(server_info, 'quality_str'):
-        qs = getattr(server_info, 'quality_s', None)
-        qStr = str(qs) if qs is not None else 'x'
-        ks = getattr(server_info, 'keyframe_distance', None)
-        kStr = ('_k%d' % ks) if ks is not None else ''
-        server_info.quality_str = "%d_%s%s" % (server_info.quality_y, qStr, kStr)
-
-    if hasattr(server_info, 'regions') and len(server_info.regions) == 0:
-        print "ERROR: region list cannot be empty"
-        print
-        print uStr
-        sys.exit(1)
-
-    if hasattr(server_info, 'lambda_function') and (os.environ.get("AWS_ACCESS_KEY_ID") is None or os.environ.get("AWS_SECRET_ACCESS_KEY") is None):
-        print "ERROR: You must set the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY envvars"
-        print
-        print uStr
-        sys.exit(1)
-
-    if hasattr(server_info, 'num_passes'):
-        if getattr(server_info, 'keyframe_distance', None):
-            server_info.num_passes = (1, server_info.keyframe_distance, 0, 0)
-        else:
-            assert server_info.num_passes[1] == 0, "In swframe mode, phase two is not supported."
-
-    for f in [cacertfile, srvcrtfile, srvkeyfile]:
-        try:
-            os.stat(str(f))
-        except:
-            print "ERROR: Cannot open SSL cert or key file '%s'" % str(f)
-            print
-            print uStr
-            sys.exit(1)
-
-    # server_info.cacert = libmu.util.read_pem(cacertfile)
-    server_info.srvcrt = libmu.util.read_pem(srvcrtfile)
-    server_info.srvkey = libmu.util.read_pem(srvkeyfile)
+    @classmethod
+    def kill(cls, task):
+        pass
