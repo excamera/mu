@@ -47,10 +47,11 @@ def _handle_server_sock(ls, states, state_fd_map, state_actNum_map, server_info,
     if len(states) == server_info.num_parts:
         # no need to listen any longer, we have all our connections
         try:
-            ls.shutdown()
+            ls.shutdown(0)
             ls.close()
-        except:
-            logging.warning("failure shutting down the lsock")
+        except Exception as e:
+            logging.error("failure shutting down the lsock")
+            logging.error(e.message)
             pass
 
         ls = None
@@ -110,8 +111,10 @@ def server_launch(server_info, event, akid, secret):
     if True:
         # pylint: disable=no-member
         # (pylint can't "see" into C modules)
+        start = time.time()
         total_parts = server_info.num_parts + getattr(server_info, 'overprovision', 0)
         pylaunch.launchpar(total_parts, server_info.lambda_function, akid, secret, json.dumps(event), server_info.regions)
+        logging.info("launchpar uses: "+str((time.time()-start)*1000)+" milliseconds to send "+str(total_parts)+" requests")
         #sys.exit(0)
 
 ###
@@ -226,8 +229,11 @@ def server_main_loop(states, constructor, server_info):
                 poll_obj.register(states[idx], rwflags[idx])
             else:
                 try:
+                    logging.debug("unregistering worker:", idx)
                     poll_obj.unregister(states[idx])
+                    logging.debug("worker", idx, "unregistered")
                 except:
+                    logging.error("worker", idx, "unregister error")
                     pass
 
         if lsock is None and lsock_fd is not None:

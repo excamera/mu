@@ -16,17 +16,21 @@ import libmu.util
 
 class Task(object):
 
-    def __init__(self, lambda_func, init_state, actor_num, event, regions=None):
+    def __init__(self, lambda_func, init_state, incoming_events, outgoing_queues, event, regions=None):
         self.lambda_func = lambda_func
         self.constructor = init_state
-        self.actor_num = actor_num
+        self.incoming_events = incoming_events
+        self.outgoing_queues = outgoing_queues
         self.event = event
         self.regions = ["us-east-1"] if regions is None else regions
         self.current_state = None
         self.rwflag = 0
 
+    def __str__(self):
+        return "task in waiting" if self.current_state is None else self.current_state.__class__.__name__
+
     def start(self, ns):
-        self.current_state = self.constructor(ns, self.actor_num)
+        self.current_state = self.constructor(ns, self.incoming_events, self.outgoing_queues)
         self.current_state.do_handshake()
 
     def do_handle(self):

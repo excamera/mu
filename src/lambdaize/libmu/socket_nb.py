@@ -212,4 +212,4 @@ class SocketNB(object):
             self.close()
         else:
             self.handshaking = False
-            logging.debug("handshaked: "+str(self))
+            logging.info("handshaked: "+str(self))

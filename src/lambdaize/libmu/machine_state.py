@@ -11,12 +11,13 @@ class MachineState(SocketNB):
     expect = None
     extra = "(base class)"
 
-    def __init__(self, prevState, actorNum=0):
+    def __init__(self, prevState, actorNum=0, in_events=None):
         super(MachineState, self).__init__(prevState)
 
         if isinstance(prevState, MachineState):
             self.prevState = prevState
             self.actorNum = prevState.actorNum
+            self.in_events = prevState.in_events
             self.timestamps = prevState.timestamps
             self.stateinfo = prevState.stateinfo
             self.info = prevState.info
@@ -25,6 +26,7 @@ class MachineState(SocketNB):
             # first time we're being initialized
             self.prevState = None
             self.actorNum = actorNum
+            self.in_events = {} if in_events is None else in_events
             self.timestamps = []
             self.stateinfo = []
             self.info = {}
@@ -123,12 +125,12 @@ class MachineState(SocketNB):
 class TerminalState(MachineState):
     extra = "(terminal state)"
 
-    def __init__(self, prevState, actorNum=0):
-        super(TerminalState, self).__init__(prevState, actorNum)
+    def __init__(self, prevState, actorNum=0, in_events=None):
+        super(TerminalState, self).__init__(prevState, actorNum, in_events)
 
 class ErrorState(TerminalState):
-    def __init__(self, prevState, err="", actorNum=0):
-        super(ErrorState, self).__init__(prevState, actorNum)
+    def __init__(self, prevState, err="", actorNum=0, in_events=None):
+        super(ErrorState, self).__init__(prevState, actorNum, in_events)
         self.close()
         self.err = err
 
@@ -141,8 +143,8 @@ class OnePassState(MachineState):
     extra = "(one-pass state)"
     nextState = TerminalState
 
-    def __init__(self, prevState, actorNum=0):
-        super(OnePassState, self).__init__(prevState, actorNum)
+    def __init__(self, prevState, actorNum=0, in_events=None):
+        super(OnePassState, self).__init__(prevState, actorNum, in_events)
 
         if self.expect is None:
             self.expect = libmu.util.rand_str(32)
@@ -171,8 +173,8 @@ class MultiPassState(MachineState):
     nextState = TerminalState
     extra = "(multi-pass state)"
 
-    def __init__(self, prevState, actorNum=0):
-        super(MultiPassState, self).__init__(prevState, actorNum)
+    def __init__(self, prevState, actorNum=0, in_events=None):
+        super(MultiPassState, self).__init__(prevState, actorNum, in_events)
         self.cmdNum = 0
         self.commands = []
         self.expects = []
@@ -213,8 +215,8 @@ class CommandListState(MultiPassState):
     commandlist = []
     pipelined = False
 
-    def __init__(self, prevState, actorNum=0):
-        super(CommandListState, self).__init__(prevState, actorNum)
+    def __init__(self, prevState, actorNum=0, in_events=None):
+        super(CommandListState, self).__init__(prevState, actorNum, in_events)
 
         # explicit expect if given, otherwise set expect based on previous command
         self.expects = [ self.commandlist[0][0] if isinstance(self.commandlist[0], tuple) else "OK" ]
@@ -262,8 +264,8 @@ class ForLoopState(OnePassState):
     iterInit = 0
     iterFin = 0
 
-    def __init__(self, prevState, actorNum=0):
-        super(ForLoopState, self).__init__(prevState, actorNum)
+    def __init__(self, prevState, actorNum=0, in_events=None):
+        super(ForLoopState, self).__init__(prevState, actorNum, in_events)
 
         # initialize the loop
         if self.info.get(self.breakKey) is None:
@@ -285,8 +287,8 @@ class SuperpositionState(MachineState):
     state_constructors = [TerminalState]
     nextState = TerminalState
 
-    def __init__(self, prevState, actorNum=0):
-        super(SuperpositionState, self).__init__(prevState, actorNum)
+    def __init__(self, prevState, actorNum=0, in_events=None):
+        super(SuperpositionState, self).__init__(prevState, actorNum, in_events)
         states = []
         for s in self.state_constructors:
             states.append(s(prevState, actorNum))
@@ -350,12 +352,12 @@ class SuperpositionState(MachineState):
 class InfoWatcherState(OnePassState):
     extra = "(infowatcher)"
 
-    def __init__(self, prevState, actorNum=0):
+    def __init__(self, prevState, actorNum=0, in_events=None):
         # need to set random expect string first to prevent OnePassState from kicking us
         if self.expect is None:
             self.expect = libmu.util.rand_str(32)
 
-        super(InfoWatcherState, self).__init__(prevState, actorNum)
+        super(InfoWatcherState, self).__init__(prevState, actorNum, in_events)
 
     def info_updated(self):
         self.kick()
