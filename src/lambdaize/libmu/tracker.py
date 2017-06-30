@@ -27,7 +27,8 @@ class Task(object):
         self.rwflag = 0
 
     def __str__(self):
-        return "task in waiting" if self.current_state is None else self.current_state.__class__.__name__
+        return "task in waiting" if self.current_state is None else self.current_state.__module__ + \
+                                                                    ':' + self.current_state.__class__.__name__
 
     def start(self, ns):
         self.current_state = self.constructor(ns, self.incoming_events, self.outgoing_queues)
