@@ -250,19 +250,19 @@ def do_emit(msg, vals):
 
     if protocol == 's3':
         bucket = key.split('/', 1)[0]
-        path = key.split('/', 1)[1].rstrip('/')
+        prefix = key.split('/', 1)[1].rstrip('/')
         for f in filelist:
             try:
-                s3_client.upload_file(local_dir+'/'+f, bucket, path+'/'+f)
+                s3_client.upload_file(local_dir+'/'+f, bucket, prefix+'/'+f)
             except:
-                donemsg = 'FAIL:EMIT(%s->%s\n%s)' % (local_dir, bucket+'/'+path+'/'+f, traceback.format_exc())
+                donemsg = 'FAIL:EMIT(%s->%s\n%s)' % (local_dir, bucket+'/'+prefix+'/'+f, traceback.format_exc())
                 break
 
     elif protocol == 'redis':
-        pass
+        raise Exception('not implemented yet')
 
     elif protocol == 'file':
-        pass
+        raise Exception('not implemented yet')
 
     else:
         donemsg = 'FAIL(unknown protocol: %s)' % protocol
@@ -277,12 +277,40 @@ def do_collect(msg, vals):
     msg := URI local_dir_to_store
     URI := s3://key (key includes bucket name) | redis://key | file://worker_id/local_dir (file:// needs a relay server or NAT traverse)
     """
-    protocol = msg.split(' ', 1)[0].split('://', 1)[0]
-    key = msg.split(' ', 1)[0].split('://', 1)[1]
     local_dir = msg.split(' ', 1)[1]
     local_dir = local_dir.replace("##TMPDIR##", vals['_tmpdir'])
+    local_dir = local_dir.rstrip('/')
 
-    filelist = os.listdir(local_dir)
+    protocol = msg.split(' ', 1)[0].split('://', 1)[0]
+    key = msg.split(' ', 1)[0].split('://', 1)[1]
+
+    donemsg = 'OK:COLLECT(%s->%s)' % (msg.split(' ', 1)[0], local_dir)
+
+    if protocol == 's3':
+        bucket = key.split('/', 1)[0]
+        prefix = key.split('/', 1)[1].rstrip('/')
+        filename = ''
+        for o in s3_client.list_objects(Bucket=bucket, Prefix=prefix)['Contents']:
+            try:
+                filename = o['Key'].split('/')[-1]
+                s3_client.download_file(bucket, o['Key'], local_dir+'/'+filename)
+            except:
+                donemsg = 'FAIL:COLLECT(%s->%s\n%s)' % ('s3://'+bucket+'/'+o['Key'], local_dir+'/'+filename, traceback.format_exc())
+                break
+
+    elif protocol == 'redis':
+        raise Exception('not implemented yet')
+
+    elif protocol == 'file':
+        raise Exception('not implemented yet')
+
+    else:
+        donemsg = 'FAIL(unknown protocol: %s)' % protocol
+
+    if vals.get('cmdsock') is not None:
+        vals['cmdsock'].enqueue(donemsg)
+    return False
+
 
 ###
 #  dispatch to handler functions
