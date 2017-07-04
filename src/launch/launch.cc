@@ -19,8 +19,10 @@ static SecureSocket new_connection(const Address &addr, const string &name, SSLC
 
 void launchpar(int nlaunch, string fn_name, string akid, string secret, string payload, vector<string> lambda_regions) {
     // prepare requests
-    cerr << "Building requests... ";
-
+//    cerr << "void launchpar(nlaunch: " << nlaunch << ", fn_name: " << fn_name <<", akid: "<<akid << ", secret: "<<secret<< ", payload: " << payload << ", lambda_regions: ";
+//    for (vector<string>::const_iterator i = lambda_regions.begin(); i != lambda_regions.end(); ++i) cerr << *i << ' ';
+//    cerr << endl;
+//    cerr << "Building requests... ";
     vector<vector<HTTPRequest>> request;
     for (unsigned j = 0; j < lambda_regions.size(); j++) {
         request.emplace_back(vector<HTTPRequest>());
@@ -36,11 +38,11 @@ void launchpar(int nlaunch, string fn_name, string akid, string secret, string p
             request[j].emplace_back(move(ll.to_http_request()));
         }
     }
-    cerr << "done.\n";
+//    cerr << "done.\n";
 
     // open connections to server
     vector<vector<SecureSocket>> www;
-    cerr << "Opening sockets...";
+//    cerr << "Opening sockets...";
     {
         vector<vector<bool>> sfins;
         vector<string> servername;
@@ -99,7 +101,7 @@ void launchpar(int nlaunch, string fn_name, string akid, string secret, string p
     // send requests
     {
         struct timespec start_time, stop_time;
-        cerr << "Sending requests... ";
+//        cerr << "Sending requests... ";
         clock_gettime(CLOCK_REALTIME, &start_time);
         for (int i = 0; i < nlaunch; i++) {
             for (unsigned j = 0; j < lambda_regions.size(); j++) {
@@ -108,8 +110,8 @@ void launchpar(int nlaunch, string fn_name, string akid, string secret, string p
             }
         }
         clock_gettime(CLOCK_REALTIME, &stop_time);
-        cerr << "done (";
-        cerr << ((double) (1000000000 * (stop_time.tv_sec - start_time.tv_sec) + stop_time.tv_nsec - start_time.tv_nsec)) / 1.0e9 << "s).\n";
+//        cerr << "done (";
+//        cerr << ((double) (1000000000 * (stop_time.tv_sec - start_time.tv_sec) + stop_time.tv_nsec - start_time.tv_nsec)) / 1.0e9 << "s).\n";
     }
 
     // parse responses
@@ -122,6 +124,10 @@ void launchpar(int nlaunch, string fn_name, string akid, string secret, string p
                 parser.parse( www[j][i].read() );
 
                 if ( not parser.empty() ) {
+                    if (parser.front().str().find("202 Accepted") == std::string::npos) {
+                        cerr << "FORREST: request " << i << " errant response: \n" << parser.front().str() << "\n";
+                        exit(-1);
+                    }
                     parser.pop();
                     www[j][i].close();
                     break;
