@@ -143,9 +143,9 @@ class OnePassState(MachineState):
     extra = "(one-pass state)"
     nextState = TerminalState
 
-    def __init__(self, prevState, actorNum=0, in_events=None):
+    def __init__(self, prevState, actorNum=0, in_events=None, trace_func=None):
         super(OnePassState, self).__init__(prevState, actorNum, in_events)
-
+        self.trace_func = trace_func
         if self.expect is None:
             self.expect = libmu.util.rand_str(32)
             self.kick()
@@ -161,6 +161,8 @@ class OnePassState(MachineState):
 
         if self.command is not None:
             self.enqueue(self.command)
+            if self.trace_func is not None:
+                self.trace_func(self.in_events, self.command)
 
         self.messages.append(msg)
 
@@ -173,11 +175,12 @@ class MultiPassState(MachineState):
     nextState = TerminalState
     extra = "(multi-pass state)"
 
-    def __init__(self, prevState, actorNum=0, in_events=None):
+    def __init__(self, prevState, actorNum=0, in_events=None, trace_func=None):
         super(MultiPassState, self).__init__(prevState, actorNum, in_events)
         self.cmdNum = 0
         self.commands = []
         self.expects = []
+        self.trace_func = trace_func
 
     def transition(self, msg):
         if self.cmdNum >= len(self.commands) or msg[:len(self.expects[self.cmdNum])] != self.expects[self.cmdNum]:
@@ -192,6 +195,8 @@ class MultiPassState(MachineState):
 
             if command is not None:
                 self.enqueue(command)
+                if self.trace_func is not None:
+                    self.trace_func(self.in_events, command)
 
             if self.cmdNum >= len(self.commands):
                 return self.nextState(self)
@@ -215,8 +220,8 @@ class CommandListState(MultiPassState):
     commandlist = []
     pipelined = False
 
-    def __init__(self, prevState, actorNum=0, in_events=None):
-        super(CommandListState, self).__init__(prevState, actorNum, in_events)
+    def __init__(self, prevState, actorNum=0, in_events=None, trace_func=None):
+        super(CommandListState, self).__init__(prevState, actorNum, in_events, trace_func)
 
         # explicit expect if given, otherwise set expect based on previous command
         self.expects = [ self.commandlist[0][0] if isinstance(self.commandlist[0], tuple) else "OK" ]
