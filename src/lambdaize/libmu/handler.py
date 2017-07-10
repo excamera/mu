@@ -284,19 +284,27 @@ def do_collect(msg, vals):
     protocol = msg.split(' ', 1)[0].split('://', 1)[0]
     key = msg.split(' ', 1)[0].split('://', 1)[1]
 
-    donemsg = 'OK:COLLECT(%s->%s)' % (msg.split(' ', 1)[0], local_dir)
-
     if protocol == 's3':
         bucket = key.split('/', 1)[0]
         prefix = key.split('/', 1)[1].rstrip('/')
         filename = ''
-        for o in s3_client.list_objects(Bucket=bucket, Prefix=prefix)['Contents']:
+
+        contents = []
+        try:
+            contents = s3_client.list_objects(Bucket=bucket, Prefix=prefix)['Contents']
+        except KeyError:
+            print "collect: no objects found"
+            pass
+
+        for o in contents:
             try:
                 filename = o['Key'].split('/')[-1]
                 s3_client.download_file(bucket, o['Key'], local_dir+'/'+filename)
             except:
                 donemsg = 'FAIL:COLLECT(%s->%s\n%s)' % ('s3://'+bucket+'/'+o['Key'], local_dir+'/'+filename, traceback.format_exc())
                 break
+        else:
+            donemsg = 'OK:COLLECT(%s->%s), get %d objects' % (msg.split(' ', 1)[0], local_dir, len(contents))
 
     elif protocol == 'redis':
         raise Exception('not implemented yet')
