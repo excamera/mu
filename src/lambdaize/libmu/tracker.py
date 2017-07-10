@@ -9,6 +9,8 @@ import logging
 import pylaunch
 from collections import defaultdict
 
+import time
+
 import libmu.defs
 import libmu.machine_state
 import libmu.util
@@ -199,10 +201,15 @@ class Tracker(object):
             for t in pending:
                 cls.waiting_queue.put(t)
             pending[0].event['addr'] = addr
-            logging.debug("akid: "+cls.akid)
-            logging.debug("secret: "+cls.secret)
+            start = time.time()
             pylaunch.launchpar(len(pending), pending[0].lambda_func, cls.akid, cls.secret,
                                json.dumps(pending[0].event), pending[0].regions)  # currently assume all the tasks use same function/region
+            # logging.info(json.dumps(pending[0].event))
+            for p in pending:
+                logger = logging.getLogger(p.incoming_events['metadata']['pipe_id'])
+                logger.debug(p.incoming_events['metadata']['lineage'] + ', ' + 'request')
+
+            logging.debug("invoking "+str(len(pending))+' workers takes '+str(time.time()-start)+' seconds')
 
     @classmethod
     def _start(cls):
@@ -229,4 +236,4 @@ class Tracker(object):
 
     @classmethod
     def kill(cls, task):
-        pass
+        pass  # not implemented yet
