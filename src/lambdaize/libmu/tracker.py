@@ -5,9 +5,9 @@ import select
 import socket
 import threading
 import logging
+from config import settings
 
 import pylaunch
-from collections import defaultdict
 
 import time
 
@@ -18,11 +18,11 @@ import libmu.util
 
 class Task(object):
 
-    def __init__(self, lambda_func, init_state, incoming_events, outgoing_queues, event, regions=None):
+    def __init__(self, lambda_func, init_state, incoming_events, emit, event, regions=None):
         self.lambda_func = lambda_func
         self.constructor = init_state
         self.incoming_events = incoming_events
-        self.outgoing_queues = outgoing_queues
+        self.emit = emit
         self.event = event
         self.regions = ["us-east-1"] if regions is None else regions
         self.current_state = None
@@ -33,7 +33,7 @@ class Task(object):
                                                                     ':' + self.current_state.__class__.__name__
 
     def start(self, ns):
-        self.current_state = self.constructor(ns, self.incoming_events, self.outgoing_queues)
+        self.current_state = self.constructor(ns, self.incoming_events, self.emit)
         self.current_state.do_handshake()
 
     def do_handle(self):
@@ -48,13 +48,6 @@ class Task(object):
 
 class Tracker(object):
 
-    config = defaultdict(lambda: None)
-
-    with open('mu_conf.json', 'r') as f:
-        c = json.load(f)
-    for k, v in c.iteritems():
-        config[k] = v
-
     started = False
     started_lock = threading.Lock()
     should_stop = False
@@ -62,14 +55,14 @@ class Tracker(object):
     submitted_queue = Queue.Queue()
     waiting_queue = Queue.Queue()
 
-    with open(config['aws_access_key_id_file'], 'r') as f:
+    with open(settings['aws_access_key_id_file'], 'r') as f:
         akid = f.read().strip()
-    with open(config['aws_secret_access_key_file'], 'r') as f:
+    with open(settings['aws_secret_access_key_file'], 'r') as f:
         secret = f.read().strip()
 
-    cacert = libmu.util.read_pem(config['cacert_file']) if config['cacert_file'] is not None else None
-    srvcrt = libmu.util.read_pem(config['srvcrt_file']) if config['srvcrt_file'] is not None else None
-    srvkey = libmu.util.read_pem(config['srvkey_file']) if config['srvkey_file'] is not None else None
+    cacert = libmu.util.read_pem(settings['cacert_file']) if 'cacert_file' in settings else None
+    srvcrt = libmu.util.read_pem(settings['srvcrt_file']) if 'srvcrt_file' in settings else None
+    srvkey = libmu.util.read_pem(settings['srvkey_file']) if 'srvkey_file' in settings else None
 
     @classmethod
     def _handle_server_sock(cls, ls, tasks, fd_task_map):
@@ -90,8 +83,9 @@ class Tracker(object):
 
     @classmethod
     def _main_loop(cls):
-        lsock = libmu.util.listen_socket('0.0.0.0', cls.config['port_number'], cls.cacert, cls.srvcrt,
-                                         cls.srvkey, cls.config['backlog'])
+        logging.info("tracker listening to port: %d" % settings['tracker_port'])
+        lsock = libmu.util.listen_socket('0.0.0.0', settings['tracker_port'], cls.cacert, cls.srvcrt,
+                                         cls.srvkey, settings['tracker_backlog'])
         lsock_fd = lsock.fileno()
 
         tasks = []
@@ -204,10 +198,10 @@ class Tracker(object):
             start = time.time()
             pylaunch.launchpar(len(pending), pending[0].lambda_func, cls.akid, cls.secret,
                                json.dumps(pending[0].event), pending[0].regions)  # currently assume all the tasks use same function/region
-            # logging.info(json.dumps(pending[0].event))
+            logging.debug("event: "+json.dumps(pending[0].event))
             for p in pending:
-                logger = logging.getLogger(p.incoming_events['metadata']['pipe_id'])
-                logger.debug(p.incoming_events['metadata']['lineage'] + ', ' + 'request')
+                logger = logging.getLogger(p.incoming_events.values()[0]['metadata']['pipe_id'])
+                logger.debug(p.incoming_events.values()[0]['metadata']['lineage'] + ', ' + 'request')
 
             logging.debug("invoking "+str(len(pending))+' workers takes '+str(time.time()-start)+' seconds')
 
