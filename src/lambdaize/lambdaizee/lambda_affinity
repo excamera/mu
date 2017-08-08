@@ -1,0 +1,19 @@
+#!/usr/bin/python
+
+import sys
+import time
+import os
+import urllib
+
+def lambda_handler(infile):
+    print '/tmp/: ', os.listdir('/tmp')
+    if os.path.isfile('/tmp/'+infile.split('/')[-1]):
+        return 'hit'
+    else:
+        urllib.urlretrieve(infile, '/tmp/'+infile.split('/')[-1])
+        return 'missed'
+
+if __name__=='__main__':
+    infile = 'http://media.xiph.org/sintel/sintel-4k-png16/00002889.png'
+    print lambda_handler(infile)
+
