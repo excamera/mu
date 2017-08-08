@@ -27,4 +27,6 @@ Makefile.in
 /stamp-h1
 /compile
 /test-driver
-
+.sync/
+.idea/
+src/lambdaize/lambda_function_packages/
