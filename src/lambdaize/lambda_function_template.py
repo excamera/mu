@@ -1,5 +1,5 @@
 #!/usr/bin/python
-
+import json
 import md5
 import os
 import select
@@ -235,6 +235,8 @@ def lambda_handler(event, _):
         return handler.do_run('', {'event': event})
 
     s = util.connect_socket(addr, port, cacert, srvcrt, srvkey)
+    s.enqueue(json.dumps({'lambda_function': event['lambda_function']}))  # send init msg
+
     if not isinstance(s, SocketNB):
         return str(s)
     vals['cmdsock'] = s
