@@ -214,11 +214,14 @@ class Tracker(object):
                         except BaseException as e:
                             logging.error(e.message)
                             # pdb.set_trace()
-                    else:
-                        tsk.do_handle()
             tasks.extend(should_append)
             for r in removable:
                 tasks.remove(r)
+
+            for tsk in tasks:
+                if tsk.current_state.want_handle:
+                    if not isinstance(tsk, TaskStarter):
+                        tsk.do_handle()
 
     @classmethod
     def _invocation_loop(cls):
