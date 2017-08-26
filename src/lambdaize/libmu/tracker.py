@@ -166,17 +166,17 @@ class Tracker(object):
             for (fd, ev) in pfds:
                 if (ev & select.POLLIN) != 0:
                     if lsock is not None and fd == lsock_fd:
-                        logging.debug("listening sock got data in")
+                        logging.debug("listening sock got conn in")
                         cls._handle_server_sock(lsock, tasks, fd_task_map)
 
                     else:
-                        logging.debug("conn sock got data in")
+                        logging.debug("conn sock %d got buffer readable", fd)
                         task = fd_task_map[fd]
                         task.do_read()
 
             for (fd, ev) in pfds:
                 if (ev & select.POLLOUT) != 0:
-                    logging.debug("conn sock got data out")
+                    logging.debug("conn sock %d got buffer writable", fd)
                     task = fd_task_map[fd]
                     task.do_write()
 
@@ -213,7 +213,6 @@ class Tracker(object):
                             removable.append(tsk)
                         except BaseException as e:
                             logging.error(e.message)
-                            # pdb.set_trace()
             tasks.extend(should_append)
             for r in removable:
                 tasks.remove(r)
@@ -263,7 +262,7 @@ class Tracker(object):
                 logging.debug(str(len(lst)) + " events: " + json.dumps(lst[0].event))
                 for p in lst:
                     logger = logging.getLogger(p.incoming_events.values()[0]['metadata']['pipe_id'])
-                    logger.debug(p.incoming_events.values()[0]['metadata']['lineage'] + ', ' + 'request')
+                    logger.debug('%s, %s', p.incoming_events.values()[0]['metadata']['lineage'], 'send, request')
 
                 logging.debug(
                     "invoking " + str(len(pending)) + ' workers takes ' + str(time.time() - start) + ' seconds')

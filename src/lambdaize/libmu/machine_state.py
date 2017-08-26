@@ -11,13 +11,15 @@ class MachineState(SocketNB):
     expect = None
     extra = "(base class)"
 
-    def __init__(self, prevState, actorNum=0, in_events=None):
+    def __init__(self, prevState, **kwargs):
         super(MachineState, self).__init__(prevState)
 
         if isinstance(prevState, MachineState):
             self.prevState = prevState
-            self.actorNum = prevState.actorNum
             self.in_events = prevState.in_events
+            self.emit_event = prevState.emit_event
+            self.trace_func = prevState.trace_func
+            self.local = prevState.local
             self.timestamps = prevState.timestamps
             self.stateinfo = prevState.stateinfo
             self.info = prevState.info
@@ -25,8 +27,10 @@ class MachineState(SocketNB):
         else:
             # first time we're being initialized
             self.prevState = None
-            self.actorNum = actorNum
-            self.in_events = {} if in_events is None else in_events
+            self.in_events = kwargs.get('in_events', {})
+            self.emit_event = kwargs.get('emit_event')
+            self.trace_func = kwargs.get('trace_func')
+            self.local = {}
             self.timestamps = []
             self.stateinfo = []
             self.info = {}
@@ -39,7 +43,7 @@ class MachineState(SocketNB):
         return "%s: %s" % (type(self), str(self))
 
     def __str__(self):
-        return "%d:%s" % (self.actorNum, self.str_extra())
+        return "%s: %s" % (type(self), str(self))
 
     def str_extra(self):
         return self.extra
@@ -50,15 +54,19 @@ class MachineState(SocketNB):
     def info_updated(self):
         pass
 
+    def do_trace(self, msg, op):
+        if self.trace_func is None:
+            return
+        self.trace_func(self.in_events, msg, op)
+
     def do_handle(self):
         ### handle INFO messages
         info_updated = False
         for msg in list(self.recv_queue):
         # use list(deque) so that we can modify the deque inside the iteration
             if msg[:4] == 'INFO':
-                if Defs.debug:
-                    print "SERVER HANDLING (%d) %s" % (self.actorNum, msg)
                 info_updated = True
+                self.do_trace(msg, 'recv')
                 self.recv_queue.remove(msg)
 
                 vv = msg[5:].split(':', 1)
@@ -77,8 +85,7 @@ class MachineState(SocketNB):
         retries = []
         while state.want_handle:
             msg = state.dequeue()
-            if Defs.debug:
-                print "SERVER HANDLING (%d) %s" % (self.actorNum, msg)
+            self.do_trace(msg, 'recv')
 
             if msg[:4] == "FAIL":
                 return ErrorState(self, msg)
@@ -86,9 +93,8 @@ class MachineState(SocketNB):
             try:
                 state = state.transition(msg)
             except ValueError:
-                if Defs.debug:
-                    print "SERVER REQUEUEING (%d) %s" % (self.actorNum, msg)
                 retries.append(msg)
+                self.do_trace(msg, 'undo_recv')
 
             if Defs.debug:
                 print repr(state)
@@ -122,15 +128,16 @@ class MachineState(SocketNB):
     def get_expect(self):
         return self.expect
 
+
 class TerminalState(MachineState):
     extra = "(terminal state)"
 
-    def __init__(self, prevState, actorNum=0, in_events=None):
-        super(TerminalState, self).__init__(prevState, actorNum, in_events)
+    def __init__(self, prevState, **kwargs):
+        super(TerminalState, self).__init__(prevState, **kwargs)
 
 class ErrorState(TerminalState):
-    def __init__(self, prevState, err="", actorNum=0, in_events=None):
-        super(ErrorState, self).__init__(prevState, actorNum, in_events)
+    def __init__(self, prevState, err=""):
+        super(ErrorState, self).__init__(prevState)
         self.close()
         self.err = err
 
@@ -143,9 +150,8 @@ class OnePassState(MachineState):
     extra = "(one-pass state)"
     nextState = TerminalState
 
-    def __init__(self, prevState, actorNum=0, in_events=None, trace_func=None):
-        super(OnePassState, self).__init__(prevState, actorNum, in_events)
-        self.trace_func = trace_func
+    def __init__(self, prevState, **kwargs):
+        super(OnePassState, self).__init__(prevState, **kwargs)
         if self.expect is None:
             self.expect = libmu.util.rand_str(32)
             self.kick()
@@ -153,6 +159,7 @@ class OnePassState(MachineState):
     def kick(self):
         # schedule ourselves for immediate run
         self.recv_queue.appendleft(self.expect)
+        self.do_trace(self.expect, 'kick')
         self.want_handle = True
 
     def transition(self, msg):
@@ -161,8 +168,7 @@ class OnePassState(MachineState):
 
         if self.command is not None:
             self.enqueue(self.command)
-            if self.trace_func is not None:
-                self.trace_func(self.in_events, self.command)
+            self.do_trace(self.command, 'send')
 
         self.messages.append(msg)
 
@@ -175,12 +181,11 @@ class MultiPassState(MachineState):
     nextState = TerminalState
     extra = "(multi-pass state)"
 
-    def __init__(self, prevState, actorNum=0, in_events=None, trace_func=None):
-        super(MultiPassState, self).__init__(prevState, actorNum, in_events)
+    def __init__(self, prevState, **kwargs):
+        super(MultiPassState, self).__init__(prevState, **kwargs)
         self.cmdNum = 0
         self.commands = []
         self.expects = []
-        self.trace_func = trace_func
 
     def transition(self, msg):
         if self.cmdNum >= len(self.commands) or msg[:len(self.expects[self.cmdNum])] != self.expects[self.cmdNum]:
@@ -195,8 +200,7 @@ class MultiPassState(MachineState):
 
             if command is not None:
                 self.enqueue(command)
-                if self.trace_func is not None:
-                    self.trace_func(self.in_events, command)
+                self.do_trace(command, 'send')
 
             if self.cmdNum >= len(self.commands):
                 return self.nextState(self)
@@ -207,6 +211,7 @@ class MultiPassState(MachineState):
 
     def kick(self):
         self.recv_queue.appendleft(self.expects[self.cmdNum])
+        self.do_trace(self.expects[self.cmdNum], 'kick')
         self.want_handle = True
 
     def str_extra(self):
@@ -220,8 +225,8 @@ class CommandListState(MultiPassState):
     commandlist = []
     pipelined = False
 
-    def __init__(self, prevState, actorNum=0, in_events=None, trace_func=None):
-        super(CommandListState, self).__init__(prevState, actorNum, in_events, trace_func)
+    def __init__(self, prevState, **kwargs):
+        super(CommandListState, self).__init__(prevState, **kwargs)
 
         # explicit expect if given, otherwise set expect based on previous command
         self.expects = [ self.commandlist[0][0] if isinstance(self.commandlist[0], tuple) else "OK" ]
@@ -269,8 +274,8 @@ class ForLoopState(OnePassState):
     iterInit = 0
     iterFin = 0
 
-    def __init__(self, prevState, actorNum=0, in_events=None):
-        super(ForLoopState, self).__init__(prevState, actorNum, in_events)
+    def __init__(self, prevState, **kwargs):
+        super(ForLoopState, self).__init__(prevState, **kwargs)
 
         # initialize the loop
         if self.info.get(self.breakKey) is None:
@@ -292,11 +297,11 @@ class SuperpositionState(MachineState):
     state_constructors = [TerminalState]
     nextState = TerminalState
 
-    def __init__(self, prevState, actorNum=0, in_events=None):
-        super(SuperpositionState, self).__init__(prevState, actorNum, in_events)
+    def __init__(self, prevState, **kwargs):
+        super(SuperpositionState, self).__init__(prevState, **kwargs)
         states = []
-        for s in self.state_constructors:
-            states.append(s(prevState, actorNum))
+        # for s in self.state_constructors:
+        #     states.append(s(prevState, actorNum)) TODO: fix
         self.states = states
 
     def str_extra(self):
@@ -357,12 +362,12 @@ class SuperpositionState(MachineState):
 class InfoWatcherState(OnePassState):
     extra = "(infowatcher)"
 
-    def __init__(self, prevState, actorNum=0, in_events=None):
+    def __init__(self, prevState, **kwargs):
         # need to set random expect string first to prevent OnePassState from kicking us
         if self.expect is None:
             self.expect = libmu.util.rand_str(32)
 
-        super(InfoWatcherState, self).__init__(prevState, actorNum, in_events)
+        super(InfoWatcherState, self).__init__(prevState, **kwargs)
 
     def info_updated(self):
         self.kick()
