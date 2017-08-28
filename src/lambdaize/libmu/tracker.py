@@ -20,12 +20,13 @@ from libmu.socket_nb import SocketNB
 
 
 class Task(object):
-    def __init__(self, lambda_func, init_state, incoming_events, emit, event, regions=None):
+    def __init__(self, lambda_func, init_state, in_events, emit_event, event, config, regions=None):
         self.lambda_func = lambda_func
         self.constructor = init_state
-        self.incoming_events = incoming_events
-        self.emit = emit
+        self.in_events = in_events
+        self.emit_event = emit_event
         self.event = event
+        self.config = config
         self.current_state = None
         self.regions = ["us-east-1"] if regions is None else regions
         self.rwflag = 0
@@ -35,7 +36,7 @@ class Task(object):
                                                                  ':' + self.current_state.__class__.__name__
 
     def rewire(self, ns):
-        self.current_state = self.constructor(ns, self.incoming_events, self.emit)
+        self.current_state = self.constructor(ns, self.in_events, self.emit_event, self.config)
 
     def do_handle(self):
         self.current_state = self.current_state.do_handle()
@@ -261,8 +262,8 @@ class Tracker(object):
                                    lst[0].regions)  # currently assume all the tasks use same region
                 logging.debug(str(len(lst)) + " events: " + json.dumps(lst[0].event))
                 for p in lst:
-                    logger = logging.getLogger(p.incoming_events.values()[0]['metadata']['pipe_id'])
-                    logger.debug('%s, %s', p.incoming_events.values()[0]['metadata']['lineage'], 'send, request')
+                    logger = logging.getLogger(p.in_events.values()[0]['metadata']['pipe_id'])
+                    logger.debug('%s, %s', p.in_events.values()[0]['metadata']['lineage'], 'send, request')
 
                 logging.debug(
                     "invoking " + str(len(pending)) + ' workers takes ' + str(time.time() - start) + ' seconds')

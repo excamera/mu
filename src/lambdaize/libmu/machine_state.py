@@ -18,6 +18,7 @@ class MachineState(SocketNB):
             self.prevState = prevState
             self.in_events = prevState.in_events
             self.emit_event = prevState.emit_event
+            self.config = prevState.config
             self.trace_func = prevState.trace_func
             self.local = prevState.local
             self.timestamps = prevState.timestamps
@@ -29,6 +30,7 @@ class MachineState(SocketNB):
             self.prevState = None
             self.in_events = kwargs.get('in_events', {})
             self.emit_event = kwargs.get('emit_event')
+            self.config = kwargs.get('config', {})
             self.trace_func = kwargs.get('trace_func')
             self.local = {}
             self.timestamps = []
