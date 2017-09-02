@@ -2,6 +2,9 @@
 
 import time
 
+import logging
+import traceback
+
 from libmu.defs import Defs
 import libmu.handler
 from libmu.socket_nb import SocketNB
@@ -94,8 +97,10 @@ class MachineState(SocketNB):
 
             try:
                 state = state.transition(msg)
-            except ValueError:
+            except ValueError as e:
                 retries.append(msg)
+                logging.error(e.message)
+                logging.error(traceback.format_exc())
                 self.do_trace(msg, 'undo_recv')
 
             if Defs.debug:

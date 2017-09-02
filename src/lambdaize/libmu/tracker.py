@@ -214,6 +214,7 @@ class Tracker(object):
                             removable.append(tsk)
                         except BaseException as e:
                             logging.error(e.message)
+                            tasks.remove(tsk)
             tasks.extend(should_append)
             for r in removable:
                 tasks.remove(r)
