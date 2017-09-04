@@ -1,5 +1,5 @@
 #!/usr/bin/python
-
+import pdb
 import sys
 import os
 sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], os.pardir)))
@@ -11,6 +11,9 @@ import test.util as tutil
 
 def test_server(sock, run_nonblock, args, _):
     do_quit = args[0]
+
+    response = tutil.blocking_recv(sock)
+    print "Initial json:", response
 
     response = tutil.blocking_recv(sock)
     print "Initial OK:", response

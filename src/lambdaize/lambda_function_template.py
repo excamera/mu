@@ -198,7 +198,7 @@ def lambda_handler(event, _):
     port = int(event.get('port', 13579))
     mode = int(event.get('mode', 0))
     addr = event.get('addr', '127.0.0.1')
-    bucket = event.get('bucket', 'excamera-us-east-1')
+    bucket = event.get('bucket', 'excamera-us-west-1')
     region = event.get('region', 'us-east-1')
     cacert = event.get('cacert')
     srvkey = event.get('srvkey')
@@ -235,7 +235,7 @@ def lambda_handler(event, _):
         return handler.do_run('', {'event': event})
 
     s = util.connect_socket(addr, port, cacert, srvcrt, srvkey)
-    s.enqueue(json.dumps({'lambda_function': event['lambda_function']}))  # send init msg
+    s.enqueue(json.dumps({'lambda_function': event.get('lambda_function')}))  # send init msg
 
     if not isinstance(s, SocketNB):
         return str(s)

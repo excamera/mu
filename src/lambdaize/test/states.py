@@ -3,6 +3,8 @@
 import select
 import sys
 import os
+import traceback
+
 sys.path.insert(1, os.path.abspath(os.path.join(sys.path[0], os.pardir)))
 # insert parent directory in search path, since test/ lives alongside libmu
 
@@ -82,7 +84,8 @@ class TestSuperpositionState(SuperpositionState):
 
 class StartState(CommandListState):
     nextState = TestSuperpositionState
-    commandlist = [ ("OK:HELLO", "set:inkey:testkey")
+    commandlist = [ ("{", None)
+                  , ("OK:HELLO", "set:inkey:testkey")
                   , "set:targfile:##TMPDIR##/test2.txt"
                   , "set:cmdinfile:curl http://www.google.com | md5sum > ##TMPDIR##/test.txt"
                   , "set:fromfile:##TMPDIR##/test.txt"
@@ -97,6 +100,8 @@ def test_server(sock, *_):
 
     while True:
         if isinstance(state, ErrorState):
+            print(traceback.format_stack())
+            print(traceback.format_exc())
             raise Exception("ERROR: %s" % repr(state))
 
         if isinstance(state, TerminalState) and not state.want_write:

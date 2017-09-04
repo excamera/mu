@@ -39,7 +39,6 @@ def _handle_server_sock(ls, states, state_fd_map, state_actNum_map, server_info,
     else:
         nstate = constructor(ns, actor_number)
     nstate.do_handshake()
-
     states.append(nstate)
     state_fd_map[nstate.fileno()] = this_actor
     state_actNum_map[actor_number] = this_actor
@@ -47,7 +46,7 @@ def _handle_server_sock(ls, states, state_fd_map, state_actNum_map, server_info,
     if len(states) == server_info.num_parts:
         # no need to listen any longer, we have all our connections
         try:
-            ls.shutdown(0)
+            ls.shutdown()
             ls.close()
         except Exception as e:
             logging.error("failure shutting down the lsock")

@@ -12,7 +12,7 @@ class ServerInfo(object):
     num_offset = 0
     lambda_function = "vpxenc"
     regions = ["us-east-1"]
-    bucket = "excamera-us-east-1"
+    bucket = "excamera-us-west-1"
     out_file = None
     profiling = None
 
@@ -25,7 +25,8 @@ class FinalState(TerminalState):
 
 class VPXEncStateMachine(CommandListState):
     nextState = FinalState
-    commandlist = [ ("OK:HELLO", "set:inkey:{0}/{1}.y4m")
+    commandlist = [ ('{', None)
+                  , ("OK:HELLO", "set:inkey:{0}/{1}.y4m")
                   , "set:targfile:##TMPDIR##/{1}.y4m"
                   , "set:cmdinfile:##TMPDIR##/{1}.y4m"
                   , "set:cmdoutfile:##TMPDIR##/{1}.ivf"
@@ -40,7 +41,7 @@ class VPXEncStateMachine(CommandListState):
                   ]
 
     def __init__(self, prevState, aNum):
-        super(VPXEncStateMachine, self).__init__(prevState, aNum)
+        super(VPXEncStateMachine, self).__init__(prevState, actorNum=aNum)
         aNum = self.actorNum + ServerInfo.num_offset
         vName = ServerInfo.video_name
         self.commands = [ s.format(vName, "%08d" % aNum) if s is not None else None for s in self.commands ]

@@ -1,5 +1,5 @@
 #!/usr/bin/python
-
+import pdb
 import time
 
 import logging
@@ -27,7 +27,7 @@ class MachineState(SocketNB):
             self.timestamps = prevState.timestamps
             self.stateinfo = prevState.stateinfo
             self.info = prevState.info
-
+            self.actorNum = prevState.actorNum
         else:
             # first time we're being initialized
             self.prevState = None
@@ -35,6 +35,7 @@ class MachineState(SocketNB):
             self.emit_event = kwargs.get('emit_event')
             self.config = kwargs.get('config', {})
             self.trace_func = kwargs.get('trace_func')
+            self.actorNum = kwargs.get('actorNum')
             self.local = {}
             self.timestamps = []
             self.stateinfo = []
@@ -48,7 +49,7 @@ class MachineState(SocketNB):
         return "%s: %s" % (type(self), str(self))
 
     def __str__(self):
-        return "%s: %s" % (type(self), str(self))
+        return "%s: %s" % (type(self), self.str_extra())
 
     def str_extra(self):
         return self.extra
@@ -307,8 +308,8 @@ class SuperpositionState(MachineState):
     def __init__(self, prevState, **kwargs):
         super(SuperpositionState, self).__init__(prevState, **kwargs)
         states = []
-        # for s in self.state_constructors:
-        #     states.append(s(prevState, actorNum)) TODO: fix
+        for s in self.state_constructors:
+            states.append(s(prevState, actorNum=self.actorNum))
         self.states = states
 
     def str_extra(self):
