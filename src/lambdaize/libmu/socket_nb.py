@@ -63,7 +63,7 @@ class SocketNB(object):
             return
 
         if Defs.debug:
-            print "CLOSING SOCKET %s" % traceback.format_exc()
+            print("CLOSING SOCKET %s" % traceback.format_exc())
 
         try:
             if isinstance(self.sock, SSL.Connection):
