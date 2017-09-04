@@ -12,7 +12,7 @@ class ServerInfo(object):
     num_offset = 0
     lambda_function = "vpxenc"
     regions = ["us-east-1"]
-    bucket = "excamera-us-east-1"
+    bucket = "excamera-us-west-1"
     out_file = None
     profiling = None
 

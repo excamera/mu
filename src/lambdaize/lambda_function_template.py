@@ -195,7 +195,7 @@ def lambda_handler(event, _):
     port = int(event.get('port', 13579))
     mode = int(event.get('mode', 0))
     addr = event.get('addr', '127.0.0.1')
-    bucket = event.get('bucket', 'excamera-us-east-1')
+    bucket = event.get('bucket', 'excamera-us-west-1')
     region = event.get('region', 'us-east-1')
     cacert = event.get('cacert')
     srvkey = event.get('srvkey')
