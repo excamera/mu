@@ -4,7 +4,8 @@ import os
 import subprocess
 import sys
 import traceback
-
+import uuid
+from time import sleep
 
 import boto3
 
@@ -320,6 +321,93 @@ def do_collect(msg, vals):
     return False
 
 
+def do_emit_list(msg, vals):
+    """Emit the files to keys
+    msg := filename1 key1 filename2 key2
+    key* := s3://key (includes bucket name) | redis://key | file://local_dir (file:// needs a relay server or NAT traverse)
+    """
+
+    file_key_pairs = msg.split(' ')
+
+    for i in xrange(len(file_key_pairs) / 2):
+        f = file_key_pairs[i * 2]
+        k = file_key_pairs[i * 2 + 1]
+        f = f.replace("##TMPDIR##", vals['_tmpdir'])
+
+        try:
+            protocol = k.split('://', 1)[0]
+            path = k.split('://', 1)[1]
+        except:
+            print("k: %s" % k)
+            print("file_key_pairs: %s" % file_key_pairs)
+            libmu.util.ForkedPdb().set_trace()
+
+        if protocol == 's3':
+            bucket = path.split('/', 1)[0]
+            key = path.split('/', 1)[1].rstrip('/')
+            try:
+                s3_client.upload_file(f, bucket, key)
+            except:
+                donemsg = 'FAIL:EMIT_LIST(%s->%s: %s)' % (f, k, traceback.format_exc())
+                break
+
+        elif protocol == 'redis':
+            raise NotImplementedError('redis')
+
+        elif protocol == 'file':
+            raise NotImplementedError('file')
+        else:
+            donemsg = 'FAIL:(unknown protocol: %s)' % protocol
+            break
+    else:
+        donemsg = 'OK:EMIT_LIST(%d files)' % (len(file_key_pairs)/2)
+
+    if vals.get('cmdsock') is not None:
+        vals['cmdsock'].enqueue(donemsg)
+    return False
+
+
+def do_collect_list(msg, vals):
+    """Collect the keys to files
+    msg := key1 filename1 key2 filename2
+    key* := s3://key (includes bucket name) | redis://key | file://local_dir (file:// needs a relay server or NAT traverse)
+    """
+    file_key_pairs = msg.split(' ')
+
+    for i in xrange(len(file_key_pairs) / 2):
+        k = file_key_pairs[i * 2]
+        f = file_key_pairs[i * 2 + 1]
+        f = f.replace("##TMPDIR##", vals['_tmpdir'])
+
+        protocol = k.split('://', 1)[0]
+        path = k.split('://', 1)[1]
+
+        if protocol == 's3':
+            bucket = path.split('/', 1)[0]
+            key = path.split('/', 1)[1].rstrip('/')
+            try:
+                s3_client.download_file(bucket, key, f)
+            except:
+                print("bucket: %s, key: %s, f: %s" % (bucket, key, f))
+                donemsg = 'FAIL:COLLECT_LIST(%s->%s: %s)' % (k, f, traceback.format_exc())
+                break
+
+        elif protocol == 'redis':
+            raise NotImplementedError('redis')
+
+        elif protocol == 'file':
+            raise NotImplementedError('file')
+        else:
+            donemsg = 'FAIL(unknown protocol: %s)' % protocol
+            break
+    else:
+        donemsg = 'OK:COLLECT_LIST(%d files)' % (len(file_key_pairs)/2)
+
+    if vals.get('cmdsock') is not None:
+        vals['cmdsock'].enqueue(donemsg)
+
+    return False
+
 ###
 #  dispatch to handler functions
 ###
@@ -330,6 +418,8 @@ message_types = { 'set:': do_set
                 , 'dump_vals:': do_dump_vals
                 , 'emit:': do_emit
                 , 'collect:': do_collect
+                , 'emit_list:': do_emit_list
+                , 'collect_list:': do_collect_list
                 , 'retrieve:': do_retrieve
                 , 'upload:': do_upload
                 , 'echo:': do_echo
