@@ -1,12 +1,15 @@
 #!/usr/bin/python
-
+import json
+import os
 import random
 import socket
 import traceback
 import logging
 
+import sys
 from OpenSSL import SSL, crypto
 from OpenSSL._util import lib as _ssl_lib
+from multiprocessing import Process
 
 import libmu.socket_nb
 import libmu.defs
@@ -203,3 +206,31 @@ def read_pem(fname):
                 ret += line.rstrip()
 
     return ret
+
+
+class ForkedPdb(pdb.Pdb):
+    """A Pdb subclass that may be used
+    from a forked multiprocessing child
+    Borrowed from <http://stackoverflow.com/a/23654936> for debugging.
+    """
+    def interaction(self, *args, **kwargs):
+        _stdin = sys.stdin
+        try:
+            sys.stdin = open('/dev/stdin')
+            pdb.Pdb.interaction(self, *args, **kwargs)
+        finally:
+            sys.stdin = _stdin
+
+
+def mock_launch(n, func, akid, secret, event, regions):
+    for i in xrange(n):
+        p = Process(target=lambda_setup, args=(json.loads(event),))
+        p.start()
+
+
+def lambda_setup(event):
+    os.chdir(os.path.dirname(os.path.realpath(__file__)) + '/../mock_lambda/')
+    sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)) + '/../mock_lambda/')
+    event['rm_tmpdir'] = 0
+    import lambda_function_template
+    lambda_function_template.lambda_handler(event, None)

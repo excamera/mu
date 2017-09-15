@@ -258,9 +258,12 @@ class Tracker(object):
                 lst[0].event['addr'] = addr
                 lst[0].event['lambda_func'] = func
                 start = time.time()
-                pylaunch.launchpar(len(lst), func, cls.akid, cls.secret,
-                                   json.dumps(lst[0].event),
-                                   lst[0].regions)  # currently assume all the tasks use same region
+                if settings['mock_lambda']:
+                    libmu.util.mock_launch(len(lst), func, cls.akid, cls.secret, json.dumps(lst[0].event),
+                                       lst[0].regions)
+                else:
+                    pylaunch.launchpar(len(lst), func, cls.akid, cls.secret, json.dumps(lst[0].event),
+                                       lst[0].regions)  # currently assume all the tasks use same region
                 logging.debug(str(len(lst)) + " events: " + json.dumps(lst[0].event))
                 for p in lst:
                     logger = logging.getLogger(p.in_events.values()[0]['metadata']['pipe_id'])
