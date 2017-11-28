@@ -30,3 +30,8 @@ Makefile.in
 .sync/
 .idea/
 src/lambdaize/lambda_function_packages/
+*.pb.h
+*.pb.cc
+*_pb2.py
+*_pb2_grpc.py
+

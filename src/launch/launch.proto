@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package launch;
+
+service Launch {
+  rpc LaunchPar (LaunchParRequest) returns (LaunchParReply) {}
+}
+
+message LaunchParRequest {
+  int32  nlaunch = 1;
+  string fn_name = 2;
+  string akid = 3;
+  string secret = 4;
+  string payload = 5;
+  repeated string lambda_regions = 6;
+}
+
+message LaunchParReply {
+  bool success = 1;
+  string error_msg = 2;
+}
+

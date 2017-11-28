@@ -4,6 +4,13 @@
 #include <string>
 #include <time.h>
 #include <unistd.h>
+#include <mutex>
+#include <deque>
+#include <condition_variable>
+#include <thread>
+#include <chrono>
+
+#include <grpc++/grpc++.h>
 
 #include "http_request.hh"
 #include "http_response_parser.hh"
@@ -12,8 +19,18 @@
 #include "secure_socket.hh"
 
 #include "launch.hh"
+#include "launch.grpc.pb.h"
+#include "blockingconcurrentqueue.h"
+
 
 using namespace std;
+using grpc::Server;
+using grpc::ServerBuilder;
+using grpc::ServerContext;
+using grpc::Status;
+using launch::LaunchParRequest;
+using launch::LaunchParReply;
+using launch::Launch;
 
 static SecureSocket new_connection(const Address &addr, const string &name, SSLContext &ctx);
 
@@ -21,7 +38,7 @@ void launchpar(int nlaunch, string fn_name, string akid, string secret, string p
     // prepare requests
 //    cerr << "void launchpar(nlaunch: " << nlaunch << ", fn_name: " << fn_name <<", akid: "<<akid << ", secret: "<<secret<< ", payload: " << payload << ", lambda_regions: ";
 //    for (vector<string>::const_iterator i = lambda_regions.begin(); i != lambda_regions.end(); ++i) cerr << *i << ' ';
-//    cerr << endl;
+   // cerr << endl;
 //    cerr << "Building requests... ";
     vector<vector<HTTPRequest>> request;
     for (unsigned j = 0; j < lambda_regions.size(); j++) {
@@ -150,3 +167,78 @@ SecureSocket new_connection(const Address &addr, const string &name, SSLContext 
 
     return this_www;
 }
+
+class LaunchServiceImpl final : public Launch::Service {
+    struct LaunchParInvocation {
+        int nlaunch;
+        std::string fn_name;
+        std::string akid;
+        std::string secret;
+        std::string payload;
+        std::vector<std::string> lambda_regions;
+        std::chrono::steady_clock::time_point enqueue_time_monolith;
+        clock_t enqueue_time_processor;
+    };
+
+private:
+    moodycamel::BlockingConcurrentQueue<struct LaunchParInvocation> invocation_queue;
+
+public:
+    Status LaunchPar(ServerContext*, const LaunchParRequest* request, LaunchParReply* response) override {
+        struct LaunchParInvocation invoc;
+        vector<string> regions(request->lambda_regions().begin(), request->lambda_regions().end());
+        invoc = {request->nlaunch(), request->fn_name(), request->akid(), request->secret(), request->payload(),
+            regions, std::chrono::steady_clock::now(), std::clock()};
+        this->invocation_queue.enqueue(invoc);
+        response->set_success(true);
+        return Status::OK;
+    }
+
+    void StartConsumer() {
+        std::thread consumer([this]()
+        {
+            while (true) {
+                struct LaunchParInvocation invoc, current;
+                int req_count = 0;
+                while (true) {
+                    bool found = this->invocation_queue.try_dequeue(current);
+                    if (!found) break;
+                    if (0 == req_count) {
+                        invoc = current;
+                    }
+                    req_count += current.nlaunch;
+                }
+                if (req_count == 0) {
+                    usleep(10000);
+                    continue;
+                }
+                auto dequeue_ts = std::chrono::steady_clock::now();
+                auto dequeue_ts_p = std::clock();
+                std::cerr << "the first invoc stayed in queue for: " << (std::chrono::duration<double>
+                    (dequeue_ts - invoc.enqueue_time_monolith)).count() << " seconds, " << 
+                    ((float)(dequeue_ts_p - invoc.enqueue_time_processor))/CLOCKS_PER_SEC << " processor seconds" << std::endl;
+                launchpar(req_count, invoc.fn_name, invoc.akid, invoc.secret, invoc.payload, invoc.lambda_regions);
+                std::cerr << "launchpar takes: " << (std::chrono::duration<double>(std::chrono::steady_clock::now()
+                    - dequeue_ts)).count() << " seconds to start " << req_count << " batched reqs" << std::endl;
+            }
+        });
+        consumer.detach();
+    }
+};
+
+void servegrpc(std::string listen_addr) {
+    std::cerr << "servegrpc called with " << listen_addr << std::endl;
+    std::string server_address(listen_addr);
+    LaunchServiceImpl service;
+    
+    ServerBuilder builder;
+    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    builder.RegisterService(&service);
+    std::unique_ptr<Server> server(builder.BuildAndStart());
+    std::cerr << "Server listening on " << server_address << std::endl;
+
+    service.StartConsumer();
+    std::cerr << "Consumer thread started" << std::endl;
+    server->Wait();
+}
+

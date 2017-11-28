@@ -10,12 +10,15 @@
 using namespace std;
 
 static PyObject *pylaunch_launchpar(PyObject *self, PyObject *args);
+static PyObject *pylaunch_servegrpc(PyObject *self, PyObject *args);
 
 // method table and initialization
 static PyMethodDef pylaunch_Methods[] = {
     {"launchpar", pylaunch_launchpar, METH_VARARGS, "Launch many lambdas in parallel."},
+    {"servegrpc", pylaunch_servegrpc, METH_VARARGS, "Blocking call to serve GRPC."},
     {NULL, NULL, 0, NULL }
 };
+
 PyMODINIT_FUNC initpylaunch(void) {
     cerr << "Initializing pylaunch... ";
     (void) Py_InitModule("pylaunch", pylaunch_Methods);
@@ -40,5 +43,18 @@ static PyObject *pylaunch_launchpar(PyObject *self __attribute__((unused)), PyOb
 
     launchpar(nlaunch, string(fn_name), string(akid), string(secret), string(payload), lambda_regions);
 
+    Py_RETURN_NONE;
+}
+
+static PyObject *pylaunch_servegrpc(PyObject *self __attribute__((unused)), PyObject *args) {
+    char *server_address;
+    if (! PyArg_ParseTuple(args, "s", &server_address)) {
+        return NULL;
+    }
+    Py_BEGIN_ALLOW_THREADS
+
+    servegrpc(server_address);
+
+    Py_END_ALLOW_THREADS
     Py_RETURN_NONE;
 }

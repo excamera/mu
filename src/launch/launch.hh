@@ -9,3 +9,5 @@ void launchpar(int nlaunch,
                std::string secret,
                std::string payload,
                std::vector<std::string> lambda_regions);
+
+void servegrpc(std::string listen_addr);

@@ -1,11 +1,18 @@
 #!/usr/bin/python
 import Queue
 import json
+import os
 import pdb
 import select
 import socket
 import threading
 import logging
+import trace
+import traceback
+
+import sys
+
+import grpc
 
 from config import settings
 
@@ -17,7 +24,7 @@ import libmu.defs
 import libmu.machine_state
 import libmu.util
 from libmu.socket_nb import SocketNB
-
+from libmu import launch_pb2, launch_pb2_grpc
 
 class Task(object):
     def __init__(self, lambda_func, init_state, event, regions=None, **kwargs):
@@ -67,6 +74,7 @@ class Tracker(object):
     started_lock = threading.Lock()
     should_stop = False
 
+    pylaunch_pid = None
     submitted_queue = Queue.Queue()
     waiting_queues_lock = threading.Lock()
     waiting_queues = {}
@@ -230,6 +238,15 @@ class Tracker(object):
         addr = testsock.getsockname()[0]
         testsock.close()
 
+        pid = os.fork()
+        if pid == 0:
+            pylaunch.servegrpc(settings['pylaunch_addr'])
+            sys.exit(0)
+
+        cls.pylaunch_pid = pid
+        channel = grpc.insecure_channel(settings['pylaunch_addr'])
+        stub = launch_pb2_grpc.LaunchStub(channel)
+
         while not cls.should_stop:
             pending = {}  # function name -> tasklist
 
@@ -240,7 +257,7 @@ class Tracker(object):
 
             while True:
                 try:
-                    t = cls.submitted_queue.get(block=True, timeout=0.01)
+                    t = cls.submitted_queue.get(block=False)
                     lst = pending.get(t.lambda_func, [])
                     lst.append(t)
                     pending[t.lambda_func] = lst
@@ -261,15 +278,18 @@ class Tracker(object):
                     libmu.util.mock_launch(len(lst), func, cls.akid, cls.secret, json.dumps(lst[0].event),
                                        lst[0].regions)
                 else:
-                    pylaunch.launchpar(len(lst), func, cls.akid, cls.secret, json.dumps(lst[0].event),
-                                       lst[0].regions)  # currently assume all the tasks use same region
-                logging.debug(str(len(lst)) + " events: " + json.dumps(lst[0].event))
+                    response = stub.LaunchPar(
+                        launch_pb2.LaunchParRequest(nlaunch=len(lst), fn_name=func, akid=cls.akid, secret=cls.secret,
+                                                    payload=json.dumps(lst[0].event), lambda_regions=lst[0].regions))
+
                 for p in lst:
                     logger = logging.getLogger(p.kwargs['in_events'].values()[0]['metadata']['pipe_id'])
                     logger.debug('%s, %s', p.kwargs['in_events'].values()[0]['metadata']['lineage'], 'send, request')
 
-                logging.debug(
-                    "invoking " + str(len(pending)) + ' workers takes ' + str(time.time() - start) + ' seconds')
+                logging.debug("invoking " + str(len(lst)) + ' workers via grpc takes ' + str((time.time() - start) * 1000) + ' ms')
+
+            time.sleep(0.001)
+
 
     @classmethod
     def _start(cls):
@@ -287,6 +307,7 @@ class Tracker(object):
     @classmethod
     def stop(cls):
         cls.should_stop = True
+        os.kill(cls.pylaunch_pid, signal.SIGKILL)
 
     @classmethod
     def submit(cls, task):
