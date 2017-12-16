@@ -141,7 +141,7 @@ def accept_socket(lsock):
 def rand_str(slen):
     ostr = ""
     for _ in range(0, slen):
-        cval = random.randint(0, 61)
+        cval = int(random.random()*60)
 
         if cval < 26:
             ostr += chr(cval + 65)
