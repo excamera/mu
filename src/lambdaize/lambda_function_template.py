@@ -235,7 +235,7 @@ def lambda_handler(event, _):
         return handler.do_run('', {'event': event})
 
     s = util.connect_socket(addr, port, cacert, srvcrt, srvkey)
-    s.enqueue(json.dumps({'lambda_function': event.get('lambda_function')}))  # send init msg
+    s.enqueue(json.dumps({'lambda_function': event.get('lambda_function'), 'lambda_start_ts': lambda_start_ts}))  # send init msg
 
     if not isinstance(s, SocketNB):
         return str(s)

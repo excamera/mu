@@ -51,7 +51,7 @@ class SocketNB(object):
         return self.getsockname()
 
     def getpeername(self):
-        return self.getpeername()
+        return self.sock.getpeername()
 
     @staticmethod
     def shutdown(*_):

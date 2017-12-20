@@ -1,7 +1,8 @@
 #!/usr/bin/python
-import Queue
-import json
+import sys
 import os
+import json
+import time
 import pdb
 import select
 import socket
@@ -11,18 +12,18 @@ import trace
 import traceback
 import signal
 import sys
+import errno
+import Queue
+import cProfile, pstats, StringIO
 
 import grpc
 
 from config import settings
-
 import pylaunch
-
-import time
-
 import libmu.defs
 import libmu.machine_state
 import libmu.util
+import libmu.lightlog as lightlog
 from libmu.socket_nb import SocketNB
 from libmu import launch_pb2, launch_pb2_grpc
 
@@ -90,22 +91,45 @@ class Tracker(object):
 
     @classmethod
     def _handle_server_sock(cls, ls, tasks, fd_task_map):
-        (ns, _) = ls.accept()  # may be changed to accept more than one conn
-        ns.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        ns.setblocking(False)
+        batched_accept = True
+        if batched_accept:
+            while True:
+                try:
+                    (ns, addr) = ls.accept()
+                    logging.debug("new conn from addr: %s:%s", addr[0], addr[1])
+                except socket.error, e:
+                    err = e.args[0]
+                    if err != errno.EAGAIN and err != errno.EWOULDBLOCK:
+                        logging.error("error in accept: %s", e)
+                    break
+                ns.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                ns.setblocking(False)
 
-        socknb = SocketNB(ns)
-        socknb.do_handshake()
-        # try:
-        #     new_task = Tracker.waiting_queue.get(block=False)  # assume all tasks are the same
-        # except Queue.Empty as e:
-        #     logging.warning("get response from lambda, but no one's waiting?")
-        #     return
+                socknb = SocketNB(ns)
+                socknb.do_handshake()
 
-        # new_task.start(ns)
-        task_starter = TaskStarter(socknb)
-        tasks.append(task_starter)
-        fd_task_map[task_starter.current_state.fileno()] = task_starter
+                task_starter = TaskStarter(socknb)
+                tasks.append(task_starter)
+                fd_task_map[task_starter.current_state.fileno()] = task_starter
+        else:
+            (ns, addr) = ls.accept()
+            logging.debug("new conn from addr: %s:%s", addr[0], addr[1])
+            ns.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            ns.setblocking(False)
+
+            socknb = SocketNB(ns)
+            socknb.do_handshake()
+            # try:
+            #     new_task = Tracker.waiting_queue.get(block=False)  # assume all tasks are the same
+            # except Queue.Empty as e:
+            #     logging.warning("get response from lambda, but no one's waiting?")
+            #     return
+
+            # new_task.start(ns)
+            task_starter = TaskStarter(socknb)
+            tasks.append(task_starter)
+            fd_task_map[task_starter.current_state.fileno()] = task_starter
+
 
     @classmethod
     def _main_loop(cls):
@@ -130,6 +154,7 @@ class Tracker(object):
                         logging.warning("failure shutting down the lsock")
                         pass
                     lsock = None
+                os.kill(cls.pylaunch_pid, signal.SIGKILL)
 
             dflags = []
             for (tsk, idx) in zip(tasks, range(0, len(tasks))):
@@ -168,6 +193,8 @@ class Tracker(object):
             npasses_out += 1
 
             if len(pfds) == 0:
+                if cls.should_stop:
+                    break
                 continue
 
             # look for readable FDs
@@ -214,6 +241,9 @@ class Tracker(object):
                                 real_task = Tracker.waiting_queues[init_data['lambda_function']].pop(0)
                                 if len(Tracker.waiting_queues[init_data['lambda_function']]) == 0:
                                     del Tracker.waiting_queues[init_data['lambda_function']]  # GC
+                            if 'lambda_start_ts' in init_data:
+                                logger = lightlog.getLogger(real_task.kwargs['in_events'].values()[0]['metadata']['pipe_id'])
+                                logger.debug('%f, %s, %s' % (init_data['lambda_start_ts'], real_task.kwargs['in_events'].values()[0]['metadata']['lineage'], 'recv, lambda_start_ts'))
                             real_task.rewire(tsk.current_state)  # transition to a Task
                             fd_task_map[tsk.current_state.fileno()] = real_task
                             tsk.current_state.update_flags()
@@ -247,6 +277,8 @@ class Tracker(object):
         channel = grpc.insecure_channel(settings['pylaunch_addr'])
         stub = launch_pb2_grpc.LaunchStub(channel)
 
+        # cls._invoc_pr = cProfile.Profile()
+        # cls._invoc_pr.enable()
         while not cls.should_stop:
             pending = {}  # function name -> tasklist
 
@@ -283,21 +315,30 @@ class Tracker(object):
                                                     payload=json.dumps(lst[0].event), lambda_regions=lst[0].regions))
 
                 for p in lst:
-                    logger = logging.getLogger(p.kwargs['in_events'].values()[0]['metadata']['pipe_id'])
-                    logger.debug('%s, %s', p.kwargs['in_events'].values()[0]['metadata']['lineage'], 'send, request')
+                    # logger = logging.getLogger(p.kwargs['in_events'].values()[0]['metadata']['pipe_id'])
+                    # logger.debug('%s, %s', p.kwargs['in_events'].values()[0]['metadata']['lineage'], 'send, request')
+                    logger = lightlog.getLogger(p.kwargs['in_events'].values()[0]['metadata']['pipe_id'])
+                    logger.debug('%f, %s, %s' % (time.time(), p.kwargs['in_events'].values()[0]['metadata']['lineage'], 'send, request'))
 
                 logging.debug("invoking " + str(len(lst)) + ' workers via grpc takes ' + str((time.time() - start) * 1000) + ' ms')
 
             time.sleep(0.001)
-
 
     @classmethod
     def _start(cls):
         with cls.started_lock:
             if cls.started:
                 return
-            mt = threading.Thread(target=cls._main_loop)
-            mt.setDaemon(True)
+            # pr = cProfile.Profile()
+            def profile_main():
+                # pr.enable()
+                cls._main_loop()
+                # pr.disable()
+                # pr.dump_stats('tracker_prof_output.cprof')
+                # logging.info("tracker_prof_output written")
+                logging.info("finish main loop")
+            mt = threading.Thread(target=profile_main)
+            mt.setDaemon(False)
             mt.start()
             it = threading.Thread(target=cls._invocation_loop)
             it.setDaemon(True)
@@ -307,7 +348,6 @@ class Tracker(object):
     @classmethod
     def stop(cls):
         cls.should_stop = True
-        os.kill(cls.pylaunch_pid, signal.SIGKILL)
 
     @classmethod
     def submit(cls, task):
