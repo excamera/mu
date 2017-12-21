@@ -263,8 +263,8 @@ class Tracker(object):
 
     @classmethod
     def _invocation_loop(cls):
-        testsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        testsock.connect(("lambda.us-east-1.amazonaws.com", 443))  # assume that's correct
+        testsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        testsock.connect(("lambda.us-east-1.amazonaws.com", 443))  # assume that's correct (it's not)
         addr = testsock.getsockname()[0]
         testsock.close()
 
@@ -303,7 +303,7 @@ class Tracker(object):
                     cls.waiting_queues[k] = wq
 
             for func, lst in pending.iteritems():
-                lst[0].event['addr'] = addr
+                lst[0].event['addr'] = settings['daemon_addr']
                 lst[0].event['lambda_func'] = func
                 start = time.time()
                 if settings['mock_lambda']:
