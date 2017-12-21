@@ -6,16 +6,21 @@ AM_CXXFLAGS = $(PICKY_CXXFLAGS)
 		@protoc -I$(srcdir) --cpp_out=$(builddir) $(srcdir)/launch.proto
 		@python -m grpc_tools.protoc -I$(srcdir) --python_out=$(builddir)/../lambdaize/libmu/ --grpc_python_out=$(builddir)/../lambdaize/libmu/ $(srcdir)/launch.proto
 
+# and if we want to make a seperate executable...
+bin_PROGRAMS = launcher
+launcher_SOURCES = launch.hh launch.cc concurrentqueue.h blockingconcurrentqueue.h launcher.cc
+nodist_launcher_SOURCES = launch.pb.h launch.pb.cc launch.grpc.pb.h launch.grpc.pb.cc
+launcher_LDADD = ../lambdareq/liblambdareq.la ../http/libhttp.la ../net/libnet.la ../util/libutil.la $(OpenSSL_LIBS)
+launcher_LDFLAGS = -lprotobuf -lgrpc++ -lpthread
+
+launcher_CPPFLAGS = $(AM_CPPFLAGS)
+
 lib_LTLIBRARIES = liblaunch.la
 liblaunch_la_SOURCES = launch.hh launch.cc concurrentqueue.h blockingconcurrentqueue.h
-nodist_liblaunch_la_SOURCES = $(builddir)/launch.pb.h $(builddir)/launch.pb.cc $(builddir)/launch.grpc.pb.h $(builddir)/launch.grpc.pb.cc
+nodist_liblaunch_la_SOURCES = launch.pb.h launch.pb.cc launch.grpc.pb.h launch.grpc.pb.cc
 liblaunch_la_LIBADD = ../lambdareq/liblambdareq.la ../http/libhttp.la ../net/libnet.la ../util/libutil.la $(OpenSSL_LIBS)
 liblaunch_la_LDFLAGS = -lprotobuf -lgrpc++ -lpthread
 
 MOSTLYCLEANFILES = launch.pb.h launch.pb.cc launch.grpc.pb.h launch.grpc.pb.cc
 
-#bin_PROGRAMS = cpplaunch
 
-#cpplaunch_SOURCES = launch.hh launch.cc launch.pb.h launch.pb.cc launch.grpc.pb.h launch.grpc.pb.cc
-#cpplaunch_LDADD = ../lambdareq/liblambdareq.la ../http/libhttp.la ../net/libnet.la ../util/libutil.la $(OpenSSL_LIBS)
-#cpplaunch_LDFLAGS = -lprotobuf -lgrpc++ -lpthread

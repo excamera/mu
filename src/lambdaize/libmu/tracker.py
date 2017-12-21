@@ -19,7 +19,7 @@ import cProfile, pstats, StringIO
 import grpc
 
 from config import settings
-import pylaunch
+#import pylaunch
 import libmu.defs
 import libmu.machine_state
 import libmu.util
@@ -75,7 +75,7 @@ class Tracker(object):
     started_lock = threading.Lock()
     should_stop = False
 
-    pylaunch_pid = None
+    #pylaunch_pid = None
     submitted_queue = Queue.Queue()
     waiting_queues_lock = threading.Lock()
     waiting_queues = {}
@@ -154,7 +154,7 @@ class Tracker(object):
                         logging.warning("failure shutting down the lsock")
                         pass
                     lsock = None
-                os.kill(cls.pylaunch_pid, signal.SIGKILL)
+                #os.kill(cls.pylaunch_pid, signal.SIGKILL)
 
             dflags = []
             for (tsk, idx) in zip(tasks, range(0, len(tasks))):
@@ -268,12 +268,12 @@ class Tracker(object):
         addr = testsock.getsockname()[0]
         testsock.close()
 
-        pid = os.fork()
-        if pid == 0:
-            pylaunch.servegrpc(settings['pylaunch_addr'])
-            sys.exit(0)
+        #pid = os.fork()
+        #if pid == 0:
+        #    pylaunch.servegrpc(settings['pylaunch_addr'])
+        #    sys.exit(0)
 
-        cls.pylaunch_pid = pid
+        #cls.pylaunch_pid = pid
         channel = grpc.insecure_channel(settings['pylaunch_addr'])
         stub = launch_pb2_grpc.LaunchStub(channel)
 
