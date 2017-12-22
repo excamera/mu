@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package joblog;
+
+message JobLog {
+  message Record {
+    double ts = 1; // timestamp
+    string lineage = 2; // lineage string
+    string op = 3; // send or recv etc.
+    string msg = 4; // message
+    string stage = 5;
+    string worker_called = 6;
+    int32  num_frames = 10;
+  }
+
+  string metadata = 1;
+  repeated Record record = 2;
+}
+

@@ -243,7 +243,7 @@ class Tracker(object):
                                     del Tracker.waiting_queues[init_data['lambda_function']]  # GC
                             if 'lambda_start_ts' in init_data:
                                 logger = lightlog.getLogger(real_task.kwargs['in_events'].values()[0]['metadata']['pipe_id'])
-                                logger.debug('%f, %s, %s' % (init_data['lambda_start_ts'], real_task.kwargs['in_events'].values()[0]['metadata']['lineage'], 'recv, lambda_start_ts'))
+                                logger.debug(ts=init_data['lambda_start_ts'], lineage=real_task.kwargs['in_events'].values()[0]['metadata']['lineage'], op='recv', msg='lambda_start_ts')
                             real_task.rewire(tsk.current_state)  # transition to a Task
                             fd_task_map[tsk.current_state.fileno()] = real_task
                             tsk.current_state.update_flags()
@@ -318,7 +318,7 @@ class Tracker(object):
                     # logger = logging.getLogger(p.kwargs['in_events'].values()[0]['metadata']['pipe_id'])
                     # logger.debug('%s, %s', p.kwargs['in_events'].values()[0]['metadata']['lineage'], 'send, request')
                     logger = lightlog.getLogger(p.kwargs['in_events'].values()[0]['metadata']['pipe_id'])
-                    logger.debug('%f, %s, %s' % (time.time(), p.kwargs['in_events'].values()[0]['metadata']['lineage'], 'send, request'))
+                    logger.debug(ts=time.time(), lineage=p.kwargs['in_events'].values()[0]['metadata']['lineage'], op='send', msg='invocation')
 
                 logging.debug("invoking " + str(len(lst)) + ' workers via grpc takes ' + str((time.time() - start) * 1000) + ' ms')
 
