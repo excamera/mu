@@ -1,11 +1,6 @@
 AM_CPPFLAGS = $(CXX14_FLAGS) -I$(srcdir)/../util -I$(srcdir)/../net -I$(srcdir)/../http -I$(srcdir)/../lambdareq
 AM_CXXFLAGS = $(PICKY_CXXFLAGS)
 
-%.pb.cc %.pb.h: %.proto
-		@protoc -I$(srcdir) --grpc_out=$(builddir) --plugin=protoc-gen-grpc=`which grpc_cpp_plugin` $(srcdir)/launch.proto
-		@protoc -I$(srcdir) --cpp_out=$(builddir) $(srcdir)/launch.proto
-		@python -m grpc_tools.protoc -I$(srcdir) --python_out=$(builddir)/../lambdaize/libmu/ --grpc_python_out=$(builddir)/../lambdaize/libmu/ $(srcdir)/launch.proto
-
 # and if we want to make a seperate executable...
 bin_PROGRAMS = launcher
 launcher_SOURCES = launch.hh launch.cc concurrentqueue.h blockingconcurrentqueue.h launcher.cc
