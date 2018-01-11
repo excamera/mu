@@ -250,7 +250,7 @@ class Tracker(object):
                             should_append.append(real_task)
                             removable.append(tsk)
                         except BaseException as e:
-                            logging.error(e.message)
+                            logging.error(traceback.format_exc())
                             removable.append(tsk)
             tasks.extend(should_append)
             for r in removable:
