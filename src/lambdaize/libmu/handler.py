@@ -254,10 +254,10 @@ def do_emit(msg, vals):
         bucket = key.split('/', 1)[0]
         prefix = key.split('/', 1)[1].rstrip('/')
 
-        if vals.get('threadpool_s3') == 1:
+        if vals.get('threadpool_s3') >= 1:
             # thread pool:
             try:
-                pool = ThreadPool(len(filelist))
+                pool = ThreadPool(vals['threadpool_s3'])
                 results = pool.map(lambda f: s3_client.upload_file(local_dir+'/'+f, bucket, prefix+'/'+f), filelist)
                 pool.close()
                 pool.join()
@@ -311,9 +311,9 @@ def do_collect(msg, vals):
         except KeyError:
             print "collect: no objects found"
 
-        if vals.get('threadpool_s3') == 1:
+        if vals.get('threadpool_s3') >= 1:
             try:
-                pool = ThreadPool(len(contents))
+                pool = ThreadPool(vals['threadpool_s3'])
                 results = pool.map(lambda o: s3_client.download_file(bucket, o['Key'], local_dir+'/'+o['Key'].split('/')[-1]), contents)
                 pool.close()
                 pool.join()
