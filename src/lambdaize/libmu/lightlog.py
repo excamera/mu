@@ -9,6 +9,7 @@ _logger_dict = {}
 class Logger(object):
     def __init__(self):
         self.cached = []
+        self.metadata = ''
 
     def debug(self, **kwargs):
         if 'ts' not in kwargs:
@@ -17,12 +18,16 @@ class Logger(object):
 
     info = warning = error = debug
 
+    def add_metadata(self, meta):
+        self.metadata += meta
+
     def serialize(self):
         log = joblog_pb2.JobLog()
         for l in self.cached:
             r = log.record.add()
             for k,v in l.iteritems():
                 setattr(r, k, v)
+        log.metadata = self.metadata
         return log.SerializeToString()
 
 

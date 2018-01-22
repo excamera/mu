@@ -303,40 +303,29 @@ def do_collect(msg, vals):
     if protocol == 's3':
         bucket = key.split('/', 1)[0]
         prefix = key.split('/', 1)[1].rstrip('/')
-        filename = ''
 
-        contents = []
+        listed = []
         try:
-            contents = s3_client.list_objects(Bucket=bucket, Prefix=prefix)['Contents']
-        except KeyError:
-            print "collect: no objects found"
-
-        if vals.get('threadpool_s3') >= 1:
-            try:
-                pool = ThreadPool(vals['threadpool_s3'])
-                results = pool.map(lambda o: s3_client.download_file(bucket, o['Key'], local_dir+'/'+o['Key'].split('/')[-1]), contents)
-                pool.close()
-                pool.join()
-            except:
-                donemsg = 'FAIL:COLLECT(%s->%s\n%s)' % ('s3://' + bucket + '/...', local_dir + '/' + filename, traceback.format_exc())
-            else:
-                donemsg = 'OK:COLLECT(%s->%s), get %d objects' % (msg.split(' ', 1)[0], local_dir, len(contents))
-
-        else:
-            for o in contents:
-                try:
-                    filename = o['Key'].split('/')[-1]
-                    s3_client.download_file(bucket, o['Key'], local_dir+'/'+filename)
-                except:
-                    donemsg = 'FAIL:COLLECT(%s->%s\n%s)' % ('s3://'+bucket+'/'+o['Key'], local_dir+'/'+filename, traceback.format_exc())
+            while True:
+                listed = s3_client.list_objects(Bucket=bucket, Prefix=prefix)
+                if listed.has_key('Contents'):
                     break
+                sleep(1)
 
+            pool = ThreadPool(vals.get('threadpool_s3', 1))
+            results = pool.map(lambda o: s3_client.download_file(bucket, o['Key'], local_dir+'/'+o['Key'].split('/')[-1]), listed['Contents'])
+            pool.close()
+            pool.join()
+        except:
+            donemsg = 'FAIL:COLLECT(%d objects from %s to %s\n%s)' % (len(listed['Contents']), 's3://' + bucket + '/...', local_dir, traceback.format_exc())
+        else:
+            donemsg = 'OK:COLLECT(%s->%s), get %d objects' % (msg.split(' ', 1)[0], local_dir, len(listed['Contents']))
 
     elif protocol == 'redis':
-        raise Exception('not implemented yet')
+        donemsg = 'FAIL(unknown protocol: %s)' % protocol
 
     elif protocol == 'file':
-        raise Exception('not implemented yet')
+        donemsg = 'FAIL(unknown protocol: %s)' % protocol
 
     else:
         donemsg = 'FAIL(unknown protocol: %s)' % protocol
