@@ -248,7 +248,7 @@ def do_emit(msg, vals):
 
     filelist = os.listdir(local_dir)
 
-    donemsg = 'OK:EMIT(%s->%s)' % (local_dir, msg.split(' ', 1)[1])
+    donemsg = 'OK:EMIT(%s->%s), send %d objects' % (local_dir, msg.split(' ', 1)[1], len(filelist))
 
     if protocol == 's3':
         bucket = key.split('/', 1)[0]
@@ -304,7 +304,7 @@ def do_collect(msg, vals):
         bucket = key.split('/', 1)[0]
         prefix = key.split('/', 1)[1].rstrip('/')
 
-        listed = []
+        listed = {}
         try:
             while True:
                 listed = s3_client.list_objects(Bucket=bucket, Prefix=prefix)
@@ -317,7 +317,7 @@ def do_collect(msg, vals):
             pool.close()
             pool.join()
         except:
-            donemsg = 'FAIL:COLLECT(%d objects from %s to %s\n%s)' % (len(listed['Contents']), 's3://' + bucket + '/...', local_dir, traceback.format_exc())
+            donemsg = 'FAIL:COLLECT(%d objects from %s to %s\n%s)' % (len(listed.get('Contents', [])), 's3://' + bucket + '/...', local_dir, traceback.format_exc())
         else:
             donemsg = 'OK:COLLECT(%s->%s), get %d objects' % (msg.split(' ', 1)[0], local_dir, len(listed['Contents']))
 
