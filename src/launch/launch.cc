@@ -215,9 +215,9 @@ public:
                 auto dequeue_ts = std::chrono::steady_clock::now();
                 auto dequeue_ts_p = std::clock();
                 std::cerr << "the first invoc stayed in queue for: " << (std::chrono::duration<double>
-                    (dequeue_ts - invoc.enqueue_time_monolith)).count() << " seconds, " << 
+                    (dequeue_ts - invoc.enqueue_time_monolith)).count() << " seconds, " <<
                     ((float)(dequeue_ts_p - invoc.enqueue_time_processor))/CLOCKS_PER_SEC << " processor seconds" << std::endl;
-                launchpar(req_count, invoc.fn_name, invoc.akid, invoc.secret, invoc.payload, invoc.lambda_regions);
+                launchpar(req_count, invoc.fn_name, invoc.akid, invoc.secret, invoc.payload, invoc.lambda_regions); //TODO: fix multiple fn_name
                 std::cerr << "launchpar takes: " << (std::chrono::duration<double>(std::chrono::steady_clock::now()
                     - dequeue_ts)).count() << " seconds to start " << req_count << " batched reqs" << std::endl;
             }
@@ -230,7 +230,7 @@ void servegrpc(std::string listen_addr) {
     std::cerr << "servegrpc called with " << listen_addr << std::endl;
     std::string server_address(listen_addr);
     LaunchServiceImpl service;
-    
+
     ServerBuilder builder;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
     builder.RegisterService(&service);
@@ -241,4 +241,3 @@ void servegrpc(std::string listen_addr) {
     std::cerr << "Consumer thread started" << std::endl;
     server->Wait();
 }
-

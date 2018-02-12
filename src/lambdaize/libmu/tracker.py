@@ -27,6 +27,7 @@ import libmu.lightlog as lightlog
 from libmu.socket_nb import SocketNB
 from libmu import launch_pb2, launch_pb2_grpc
 
+
 class Task(object):
     def __init__(self, lambda_func, init_state, event, regions=None, **kwargs):
         self.lambda_func = lambda_func
@@ -304,15 +305,15 @@ class Tracker(object):
 
             for func, lst in pending.iteritems():
                 lst[0].event['addr'] = settings['daemon_addr']
-                lst[0].event['lambda_func'] = func
                 start = time.time()
-                if settings['mock_lambda']:
+                if settings.get('mock_lambda'):
                     libmu.util.mock_launch(len(lst), func, cls.akid, cls.secret, json.dumps(lst[0].event),
                                        lst[0].regions)
                 else:
+                    payload = json.dumps(lst[0].event)
                     response = stub.LaunchPar(
                         launch_pb2.LaunchParRequest(nlaunch=len(lst), fn_name=func, akid=cls.akid, secret=cls.secret,
-                                                    payload=json.dumps(lst[0].event), lambda_regions=lst[0].regions))
+                                                    payload=payload, lambda_regions=lst[0].regions))
 
                 for p in lst:
                     # logger = logging.getLogger(p.kwargs['in_events'].values()[0]['metadata']['pipe_id'])
