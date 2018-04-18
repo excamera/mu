@@ -156,6 +156,7 @@ class SocketNB(object):
             self.send_buf = None
 
     def _send_raw(self):
+        last_slen = None
         while True:
             self.ssl_write = None
             slen = 0
@@ -165,6 +166,10 @@ class SocketNB(object):
                 break
             except SSL.WantWriteError:
                 self.ssl_write = True
+
+            if slen == 0 and last_slen == 0:
+                break
+            last_slen = slen
 
             self.send_buf = self.send_buf[slen:]
             if len(self.send_buf) < 1:
